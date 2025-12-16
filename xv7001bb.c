@@ -19,17 +19,19 @@
   */
 void XV7001BB_Init(void)
 {
+	
+	/* 使用 HAL 延时 2 ms */
+	HAL_Delay(300);
+	
     /* 向寄存器0x1F写入0x00，禁用I²C */
     XV7001BB_WriteReg(0x1F, 0x00);
 
-    /* 使用 HAL 延时 2 ms */
-    HAL_Delay(2);
 
     /* 设置内部低通滤波器为 4 阶 50Hz
        寄存器 0x02: bit5..4 = LpfOrder (10 = 4阶), bit3..0 = LpfFc (0011 = 50Hz)
        0x02 = 0010_0011 = 0x23
     */
-    XV7001BB_WriteReg(0x02, 0x23);
+    XV7001BB_WriteReg(0x02, 0x22);
 
     /* 执行 DSP 复位以应用滤波器设置 (命令寄存器 0x0d) */
     XV7001BB_WriteReg(0x0d, 0x00);
