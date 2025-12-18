@@ -9,9 +9,9 @@ extern "C" {
 #include "cmsis_os.h"
 
 /* 零漂估计参数（环形缓冲与滑动窗口） */
-#define ZEROBUF_SIZE 1000               /* 滑动窗口大小：1000样本 × 2ms = 2秒 */
+#define ZEROBUF_SIZE 500               /* 滑动窗口大小：1000样本 × 2ms = 2秒 */
 #define STABLE_CHECK_TIMES 5            /* 分5段，每段200个样本 */
-#define SEGMENT_SIZE 200                /* 每段的样本数 */
+#define SEGMENT_SIZE 100                /* 每段的样本数 */
 
 /* 静止检测参数 */
 #define VAR_THRESHOLD 5.0f
