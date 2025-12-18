@@ -29,18 +29,39 @@
 #include <stm32f1xx_hal.h>
 #include <../CMSIS_RTOS/cmsis_os.h>
 #include <math.h>
+#include <string.h>
 #include "spi.h"
 #include "can.h"
 #include "xv7001bb.h"
 #include "can_task.h"
 #include "tim.h"
+#include "car.h"
 
 /* Private typedef -----------------------------------------------------------*/
+/* 小车队列消息结构 */
+typedef struct {
+    uint32_t id;       /* CAN 消息 ID */
+    uint8_t data[8];   /* CAN 数据（最多 8 字节） */
+    uint8_t len;       /* 数据长度 */
+} CarCanMsg_t;
+
+/* 小车状态机状态定义 */
+typedef enum {
+    CAR_STATE_IDLE = 0,         /* 空闲状态（未使用） */
+    CAR_STATE_BINDING_SN,       /* 绑定 SN 状态：等待接收左右轮 SN（ID 0x312）并发送绑定命令（ID 0x313） */
+    CAR_STATE_INIT_MOTOR,       /* 电机初始化状态：发送电机参数初始化命令（ID 0x316） */
+    CAR_STATE_ENABLE_POWER,     /* 上电使能状态：发送电源使能命令（ID 0x413）并发送锁定命令（ID 0x60D） */
+    CAR_STATE_DONE              /* 完成状态：任务自挂起 */
+} CarState_t;
+
 /* Private define ------------------------------------------------------------*/
 /* Private macro -------------------------------------------------------------*/
 /* Private variables ---------------------------------------------------------*/
 osThreadId MainTaskHandle;
 osThreadId GyroProcessTaskHandle;
+
+/* 小车 CAN 消息队列句柄 */
+osMessageQId CarCanQueueHandle = NULL;
 
 /* Private function prototypes -----------------------------------------------*/
 static void SystemClock_Config(void);
@@ -101,12 +122,7 @@ static void SystemClock_Config(void)
   */
 int main(void)
 {
-	/* STM32F1xx HAL library initialization:
-	     - Configure the Flash prefetch, instruction and Data caches
-	     - Configure the Systick to generate an interrupt each 1 msec
-	     - Set NVIC Group Priority to 4
-	     - Global MSP (MCU Support Package) initialization
-	   */
+	/* STM32F1xx HAL library initialization */
 	HAL_Init();
 	
 	/* Configure the system clock to 72 MHz */
@@ -135,9 +151,9 @@ int main(void)
 	/* Initialize TIM2 for 2ms integration interrupts */
 	TIM2_Init();
 
-	/* Create CAN control task */
-	osThreadDef(CANCTL, CAN_ControlTask, osPriorityAboveNormal, 0, configMINIMAL_STACK_SIZE);
-	osThreadCreate(osThread(CANCTL), NULL);
+	/* 创建小车 CAN 消息队列（队列深度 4） */
+	osMessageQDef(carCanQueue, 4, CarCanMsg_t);
+	CarCanQueueHandle = osMessageCreate(osMessageQ(carCanQueue), NULL);
 
 	/* Create CAN send task */
 	osThreadDef(CANSEND, CAN_SendTask, osPriorityNormal, 0, configMINIMAL_STACK_SIZE);
@@ -147,10 +163,12 @@ int main(void)
 	osThreadDef(GYROPROCESS, Gyro_ProcessTask, osPriorityHigh, 0, 512);
 	GyroProcessTaskHandle = osThreadCreate(osThread(GYROPROCESS), NULL);
 
+	/* Create car lock task */
+	osThreadDef(CARLOCK, Car_LockTask, osPriorityNormal, 0, 256);
+	CarLockTaskHandle = osThreadCreate(osThread(CARLOCK), NULL);
+
 	/* Main task definition */
 	osThreadDef(MAIN, Main_Task, osPriorityNormal, 0, 64);
-	
-	/* Start main task */
 	MainTaskHandle = osThreadCreate(osThread(MAIN), NULL);
 	
 	/* Start scheduler */
@@ -301,6 +319,125 @@ static void Gyro_ProcessTask(void const *argument)
 		        integrator.angle += 360.0f;
 	        }
         }
+    }
+}
+
+/**
+  * @brief  小车锁定任务：从队列接收 CAN 帧并按状态机处理
+  * @param  argument 未使用
+  * @retval 无
+  */
+void Car_LockTask(void const *argument)
+{
+    (void)argument;
+
+    CarState_t car_state = CAR_STATE_BINDING_SN;
+
+    /* 存储左右轮 SN，每个 SN 7 字节 */
+    uint8_t sn_left[7] = {0};
+    uint8_t sn_right[7] = {0};
+    int have_left = 0;
+    int have_right = 0;
+
+    osEvent evt;
+
+    for (;;)
+    {
+        switch (car_state)
+        {
+            case CAR_STATE_BINDING_SN:
+                /* 状态说明：等待通过队列接收 ID=0x312 的 7 字节 SN 上报，
+                   先到的为左轮（绑定为设备号 0x01），随后为右轮（绑定为设备号 0x02）。
+                   收到每个 SN 后发送绑定命令（ID 0x313，7 字节 SN + 1 字节设备号）。
+                   如果 100ms 内未收到数据，主动发送查询命令（ID 0x60D，数据 07 00）。
+                */
+                evt = osMessageGet(CarCanQueueHandle, 100); /* 等待 100ms */
+                if (evt.status == osEventMessage)
+                {
+                    CarCanMsg_t *pMsg = (CarCanMsg_t *)evt.value.p;
+                    if (pMsg->id == 0x312 && pMsg->len == 7)
+                    {
+                        if (!have_left)
+                        {
+                            memcpy(sn_left, pMsg->data, 7);
+                            have_left = 1;
+                            /* 发送左轮绑定命令 */
+                            uint8_t buf[8];
+                            memcpy(buf, sn_left, 7);
+                            buf[7] = CAR_DEV_LEFT;
+                            CAN_SendData(0x313, buf, 8);
+                        }
+                        else if (!have_right)
+                        {
+                            memcpy(sn_right, pMsg->data, 7);
+                            have_right = 1;
+                            /* 发送右轮绑定命令 */
+                            uint8_t buf[8];
+                            memcpy(buf, sn_right, 7);
+                            buf[7] = CAR_DEV_RIGHT;
+                            CAN_SendData(0x313, buf, 8);
+                        }
+
+                        if (have_left && have_right)
+                        {
+                            car_state = CAR_STATE_INIT_MOTOR; /* 进入电机初始化状态 */
+                        }
+                    }
+                }
+                else if (evt.status == osEventTimeout)
+                {
+                    /* 100ms 超时未收到数据，主动发送查询命令 */
+                    uint8_t queryCmd[2] = {0x07, 0x00};
+                    CAN_SendData(0x60D, queryCmd, 2);
+                }
+                break;
+
+            case CAR_STATE_INIT_MOTOR:
+                /* 状态说明：发送电机初始化参数（ID 0x316），格式为
+                   B4 BF CF AA 00 5F DEV DEV（共 8 字节），分别初始化左、右电机。*/
+                {
+                    uint8_t buf_left[8] = {0xB4, 0xBF, 0xCF, 0xAA, 0x00, 0x5F, CAR_DEV_LEFT, CAR_DEV_LEFT};
+                    CAN_SendData(0x316, buf_left, 8);
+                    osDelay(1);
+
+                    uint8_t buf_right[8] = {0xB4, 0xBF, 0xCF, 0xAA, 0x00, 0x5F, CAR_DEV_RIGHT, CAR_DEV_RIGHT};
+                    CAN_SendData(0x316, buf_right, 8);
+                    osDelay(1);
+
+                    car_state = CAR_STATE_ENABLE_POWER; /* 跳转到上电使能状态 */
+                }
+                break;
+
+            case CAR_STATE_ENABLE_POWER:
+                /* 状态说明：对左右电机发送上电使能命令（ID 0x413），数据为
+                   5A 00 00 00 DEV（使能），发送后再发送锁定命令（ID 0x60D，07 00）。
+                */
+                {
+                    uint8_t ena_left[5] = {0x5A, 0x00, 0x00, 0x00, CAR_DEV_LEFT};
+                    CAN_SendData(0x413, ena_left, 5);
+                    osDelay(1);
+
+                    uint8_t ena_right[5] = {0x5A, 0x00, 0x00, 0x00, CAR_DEV_RIGHT};
+                    CAN_SendData(0x413, ena_right, 5);
+                    osDelay(1);
+
+                    uint8_t lock[2] = {0x07, 0x00};
+                    CAN_SendData(0x60D, lock, 2);
+
+                    car_state = CAR_STATE_DONE; /* 完成后转到 DONE 状态 */
+                }
+                break;
+
+            case CAR_STATE_DONE:
+                /* 状态说明：完成绑定、初始化与上电使能并发送锁定命令后，任务自挂起 */
+                vTaskSuspend(NULL);
+                break;
+
+            default:
+                break;
+        }
+
+        osDelay(10);
     }
 }
 
