@@ -113,12 +113,15 @@ static void CAN_FilterConfig(void)
 	CAN_FilterTypeDef sFilterConfig;
 
 	sFilterConfig.FilterBank = 0;
-	sFilterConfig.FilterMode = CAN_FILTERMODE_IDMASK;
-	sFilterConfig.FilterScale = CAN_FILTERSCALE_32BIT;
-	sFilterConfig.FilterIdHigh = 0x0000;
-	sFilterConfig.FilterIdLow = 0x0000;
-	sFilterConfig.FilterMaskIdHigh = 0x0000;
-	sFilterConfig.FilterMaskIdLow = 0x0000;
+	sFilterConfig.FilterMode = CAN_FILTERMODE_IDLIST;     /* 列表模式 */
+	sFilterConfig.FilterScale = CAN_FILTERSCALE_16BIT;    /* 16位标度 */
+	
+	/* 配置接收的标准ID（需要左移5位） */
+	sFilterConfig.FilterIdHigh = (0x312 << 5);            /* ID 0x312 */
+	sFilterConfig.FilterIdLow = (0x312 << 5);             /* ID 0x312 (重复) */
+	sFilterConfig.FilterMaskIdHigh = (0x312 << 5);        /* ID 0x312 (重复) */
+	sFilterConfig.FilterMaskIdLow = (0x312 << 5);         /* ID 0x312 (重复) */
+	
 	sFilterConfig.FilterFIFOAssignment = CAN_RX_FIFO0;
 	sFilterConfig.FilterActivation = ENABLE;
 	sFilterConfig.SlaveStartFilterBank = 14;

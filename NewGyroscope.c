@@ -159,6 +159,10 @@ int main(void)
 	osThreadDef(CANSEND, CAN_SendTask, osPriorityNormal, 0, configMINIMAL_STACK_SIZE);
 	osThreadCreate(osThread(CANSEND), NULL);
 
+	/* Create CAN control task */
+	osThreadDef(CANCTRL, CAN_ControlTask, osPriorityNormal, 0, configMINIMAL_STACK_SIZE);
+	osThreadCreate(osThread(CANCTRL), NULL);
+
 	/* Create gyroscope processing task */
 	osThreadDef(GYROPROCESS, Gyro_ProcessTask, osPriorityHigh, 0, 512);
 	GyroProcessTaskHandle = osThreadCreate(osThread(GYROPROCESS), NULL);
@@ -361,21 +365,34 @@ void Car_LockTask(void const *argument)
                         {
                             memcpy(sn_left, pMsg->data, 7);
                             have_left = 1;
-                            /* 发送左轮绑定命令 */
+                            /* 发送左轮绑定命令（连续发送3遍） */
                             uint8_t buf[8];
                             memcpy(buf, sn_left, 7);
                             buf[7] = CAR_DEV_LEFT;
-                            CAN_SendData(0x313, buf, 8);
+                            for (int i = 0; i < 3; i++)
+                            {
+                                CAN_SendData(0x313, buf, 8);
+                                osDelay(2);
+                            }
                         }
                         else if (!have_right)
                         {
-                            memcpy(sn_right, pMsg->data, 7);
-                            have_right = 1;
-                            /* 发送右轮绑定命令 */
-                            uint8_t buf[8];
-                            memcpy(buf, sn_right, 7);
-                            buf[7] = CAR_DEV_RIGHT;
-                            CAN_SendData(0x313, buf, 8);
+                            /* 判断接收到的 SN 与左轮 SN 是否不同 */
+                            if (memcmp(sn_left, pMsg->data, 7) != 0)
+                            {
+                                memcpy(sn_right, pMsg->data, 7);
+                                have_right = 1;
+                                /* 发送右轮绑定命令（连续发送3遍） */
+                                uint8_t buf[8];
+                                memcpy(buf, sn_right, 7);
+                                buf[7] = CAR_DEV_RIGHT;
+                                for (int i = 0; i < 3; i++)
+                                {
+                                    CAN_SendData(0x313, buf, 8);
+                                    osDelay(2);
+                                }
+                            }
+                            /* 如果 SN 相同，忽略此消息，继续等待 */
                         }
 
                         if (have_left && have_right)
