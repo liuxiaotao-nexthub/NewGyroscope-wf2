@@ -141,9 +141,9 @@ void Car_LockTask(void const *argument)
                     Car_SetWheelDiameter(CAR_DEV_LEFT, 2575);   /* 2575 = 25.75mm / 0.01mm */
                     Car_SetWheelDiameter(CAR_DEV_RIGHT, 2575);
 
-                    /* 3. 设置加速度为 2000 mm/s? */
-                    Car_SetAcceleration(CAR_DEV_LEFT, 20000);   /* 20000 = 2000mm/s? / 0.1mm/s? */
-                    Car_SetAcceleration(CAR_DEV_RIGHT, 20000);
+                    /* 3. 设置加速度为 1000 mm/s? */
+                    Car_SetAcceleration(CAR_DEV_LEFT, 10000);   /* 10000 = 1000mm/s? / 0.1mm/s? */
+                    Car_SetAcceleration(CAR_DEV_RIGHT, 10000);
 
                     /* 4. 设置速度为 1000 mm/s */
                     Car_SetVelocity(CAR_DEV_LEFT, 10000);       /* 10000 = 1000mm/s / 0.1mm/s */
@@ -298,8 +298,17 @@ void Car_LockTask(void const *argument)
                 break;
 
             case CAR_STATE_DONE:
-                /* 状态说明：完成绑定、初始化与上电使能并发送锁定命令后，任务自挂起 */
-                vTaskSuspend(NULL);
+                /* 状态说明：完成绑定、初始化与上电使能并发送锁定命令后，解挂测试任务并自挂起 */
+                {
+                    /* 解挂测试任务 */
+                    if (CarTestTaskHandle != NULL)
+                    {
+                        vTaskResume(CarTestTaskHandle);
+                    }
+                    
+                    /* 锁定任务自挂起 */
+                    vTaskSuspend(NULL);
+                }
                 break;
 
             default:
@@ -307,6 +316,31 @@ void Car_LockTask(void const *argument)
         }
 
         osDelay(10);
+    }
+}
+
+/**
+  * @brief  小车运行测试任务：前进/后退循环测试
+  * @param  argument 未使用
+  * @retval 无
+  */
+void Car_TestTask(void const *argument)
+{
+    (void)argument;
+    
+    /* 任务启动时立即挂起，等待锁定任务解挂 */
+    vTaskSuspend(NULL);
+	float test_distance = 500.0f; /* 测试距离 500mm (50cm) */ 
+    
+    for (;;)
+    {
+        /* 前进 50cm */
+	    Car_MoveForward(test_distance);
+        osDelay(3000);  /* 等待 3 秒完成运动 */
+	   
+	    /* 后退 50cm */
+	    Car_MoveBackward(test_distance);
+	    osDelay(3000);  /* 等待 3 秒完成运动 */
     }
 }
 

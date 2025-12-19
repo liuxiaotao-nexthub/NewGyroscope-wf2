@@ -25,6 +25,13 @@ extern "C" {
   */
 void Car_LockTask(void const *argument);
 
+/**
+  * @brief  小车运行测试任务：前进/后退循环测试
+  * @param  argument 未使用
+  * @retval 无
+  */
+void Car_TestTask(void const *argument);
+
 #ifdef __cplusplus
 }
 #endif

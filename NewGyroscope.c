@@ -163,6 +163,10 @@ int main(void)
 	osThreadDef(CARLOCK, Car_LockTask, osPriorityNormal, 0, 256);
 	CarLockTaskHandle = osThreadCreate(osThread(CARLOCK), NULL);
 
+	/* Create car test task (created in suspended state) */
+	osThreadDef(CARTEST, Car_TestTask, osPriorityNormal, 1, 256);
+	CarTestTaskHandle = osThreadCreate(osThread(CARTEST), NULL);
+
 	/* Main task definition */
 	osThreadDef(MAIN, Main_Task, osPriorityNormal, 0, 64);
 	MainTaskHandle = osThreadCreate(osThread(MAIN), NULL);

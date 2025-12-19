@@ -14,6 +14,7 @@ extern "C" {
 
 /* 小车任务线程句柄（在 main 中创建） */
 extern osThreadId CarLockTaskHandle;
+extern osThreadId CarTestTaskHandle;
 
 /* 电机位移解析函数：从 ID 0x409 的 8 字节数据中解析位移值
  * 参数：data - 8字节CAN数据

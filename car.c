@@ -1,25 +1,26 @@
-#include "car.h"
+ï»¿#include "car.h"
 #include "can.h"
 #include <../CMSIS_RTOS/cmsis_os.h>
 #include <string.h>
 
-/* ¸ÃÎÄ¼ş×÷ÎªĞ¡³µµ×²ãÇı¶¯½Ó¿Ú£¬ÈÎÎñÊµÏÖÒÑÒÆÖÁ NewGyroscope.c£¬ºóĞøÔÚ´ËÌí¼ÓÓ²¼şÏà¹ØÊµÏÖ */
+/* è¯¥æ–‡ä»¶ä½œä¸ºå°è½¦åº•å±‚é©±åŠ¨æ¥å£ï¼Œä»»åŠ¡å®ç°å·²ç§»è‡³ NewGyroscope.cï¼Œåç»­åœ¨æ­¤æ·»åŠ ç¡¬ä»¶ç›¸å…³å®ç° */
 
-/* Ğ¡³µÈÎÎñ¾ä±ú£¨ÔÚ main ÖĞ´´½¨£© */
+
 osThreadId CarLockTaskHandle = NULL;
+osThreadId CarTestTaskHandle = NULL;
 
-/* µ±Ç°×óÓÒÂÖÉè±¸ºÅ£¨¿ÉÄÜÔÚĞ£×¼ºó±»½»»»£© */
+/* å½“å‰å·¦å³è½®è®¾å¤‡å·ï¼ˆå¯èƒ½åœ¨æ ¡å‡†åè¢«äº¤æ¢ï¼‰ */
 static uint8_t current_left_dev = CAR_DEV_LEFT;
 static uint8_t current_right_dev = CAR_DEV_RIGHT;
 
-/* ·¢ËÍĞ¡³µËø¶¨ÃüÁî£¨ID 0x60D£¬Êı¾İ: 07 00£© */
+/* å‘é€å°è½¦é”å®šå‘½ä»¤ï¼ˆID 0x60Dï¼Œæ•°æ®: 07 00ï¼‰ */
 static void send_lock_cmd(void)
 {
     uint8_t data[2] = {0x07, 0x00};
     CAN_SendData(0x60D, data, 2);
 }
 
-/* °ó¶¨ SN£º·¢ËÍ ID 0x313£¬Êı¾İ: 7 ×Ö½Ú SN + 1 ×Ö½ÚÉè±¸ºÅ */
+/* ç»‘å®š SNï¼šå‘é€ ID 0x313ï¼Œæ•°æ®: 7 å­—èŠ‚ SN + 1 å­—èŠ‚è®¾å¤‡å· */
 static void send_bind_sn(const uint8_t *sn, uint8_t dev)
 {
     uint8_t buf[8];
@@ -28,18 +29,18 @@ static void send_bind_sn(const uint8_t *sn, uint8_t dev)
     CAN_SendData(0x313, buf, 8);
 }
 
-/* ³õÊ¼»¯µç»ú²ÎÊı£º·¢ËÍ ID 0x316£¬Êı¾İ B4 BF CF AA 00 5F DEV DEV£¨8 ×Ö½Ú£© */
+/* åˆå§‹åŒ–ç”µæœºå‚æ•°ï¼šå‘é€ ID 0x316ï¼Œæ•°æ® B4 BF CF AA 00 5F DEV DEVï¼ˆ8 å­—èŠ‚ï¼‰ */
 static void send_init_motor(uint8_t dev)
 {
     uint8_t buf[8] = {0xB4, 0xBF, 0xCF, 0xAA, 0x00, 0x5F, dev, dev};
     CAN_SendData(0x316, buf, 8);
 }
 
-/* µçÔ´Ê¹ÄÜ£º·¢ËÍ ID 0x413£¬Êı¾İ: 5A/4A + 00 00 00 + DEV£¨5 ×Ö½Ú£© */
+/* ç”µæºä½¿èƒ½ï¼šå‘é€ ID 0x413ï¼Œæ•°æ®: 5A/4A + 00 00 00 + DEVï¼ˆ5 å­—èŠ‚ï¼‰ */
 static void send_enable_motor(uint8_t enable, uint8_t dev)
 {
     uint8_t buf[5];
-    buf[0] = enable; /* 0x5A Ê¹ÄÜ£¬0x4A Ê§ÄÜ */
+    buf[0] = enable; /* 0x5A ä½¿èƒ½ï¼Œ0x4A å¤±èƒ½ */
     buf[1] = 0x00;
     buf[2] = 0x00;
     buf[3] = 0x00;
@@ -48,34 +49,34 @@ static void send_enable_motor(uint8_t enable, uint8_t dev)
 }
 
 /**
-  * @brief  ½âÎöµç»úÎ»ÒÆÊı¾İ£¨ID 0x409£©
-  * @param  data: 8×Ö½ÚCANÊı¾İ
-  *         data[0]: Éè±¸ºÅ
-  *         data[2-5]: Î»ÒÆÖµ£¨Ğ¡¶Ë£¬²¹Âë£¬µ¥Î»0.1mm£©
-  * @param  dev_id: Êä³öÉè±¸ºÅ
-  * @retval Î»ÒÆÖµ£¨µ¥Î»£ºmm£©
+  * @brief  è§£æç”µæœºä½ç§»æ•°æ®ï¼ˆID 0x409ï¼‰
+  * @param  data: 8å­—èŠ‚CANæ•°æ®
+  *         data[0]: è®¾å¤‡å·
+  *         data[2-5]: ä½ç§»å€¼ï¼ˆå°ç«¯ï¼Œè¡¥ç ï¼Œå•ä½0.1mmï¼‰
+  * @param  dev_id: è¾“å‡ºè®¾å¤‡å·
+  * @retval ä½ç§»å€¼ï¼ˆå•ä½ï¼šmmï¼‰
   */
 float Car_ParseMotorPosition(const uint8_t *data, uint8_t *dev_id)
 {
-    /* ÌáÈ¡Éè±¸ºÅ */
+    /* æå–è®¾å¤‡å· */
     if (dev_id != NULL)
     {
         *dev_id = data[0];
     }
     
-    /* ÌáÈ¡Î»ÒÆÖµ£¨Ğ¡¶Ë¸ñÊ½£¬4×Ö½Ú²¹Âë£© */
+    /* æå–ä½ç§»å€¼ï¼ˆå°ç«¯æ ¼å¼ï¼Œ4å­—èŠ‚è¡¥ç ï¼‰ */
     int32_t pos_raw = (int32_t)(data[2] | (data[3] << 8) | (data[4] << 16) | (data[5] << 24));
     
-    /* ×ª»»Îª mm£¨Ô­Ê¼µ¥Î»ÊÇ 0.1mm£© */
+    /* è½¬æ¢ä¸º mmï¼ˆåŸå§‹å•ä½æ˜¯ 0.1mmï¼‰ */
     float position_mm = (float)pos_raw / 10.0f;
     
     return position_mm;
 }
 
 /**
-  * @brief  ·¢ËÍ¶ÁÈ¡µç»úÎ»ÒÆÃüÁî£¨ID 0x408£©
-  * @param  dev_id: Éè±¸ºÅ£¨CAR_DEV_LEFT »ò CAR_DEV_RIGHT£©
-  * @retval ÎŞ
+  * @brief  å‘é€è¯»å–ç”µæœºä½ç§»å‘½ä»¤ï¼ˆID 0x408ï¼‰
+  * @param  dev_id: è®¾å¤‡å·ï¼ˆCAR_DEV_LEFT æˆ– CAR_DEV_RIGHTï¼‰
+  * @retval æ— 
   */
 void Car_ReadMotorPosition(uint8_t dev_id)
 {
@@ -86,9 +87,9 @@ void Car_ReadMotorPosition(uint8_t dev_id)
 }
 
 /**
-  * @brief  ½»»»×óÓÒÂÖÉè±¸ºÅ£¨Ğ£×¼ºó¾ÀÕı£©
-  * @param  ÎŞ
-  * @retval ÎŞ
+  * @brief  äº¤æ¢å·¦å³è½®è®¾å¤‡å·ï¼ˆæ ¡å‡†åçº æ­£ï¼‰
+  * @param  æ— 
+  * @retval æ— 
   */
 void Car_SwapDeviceID(void)
 {
@@ -98,9 +99,9 @@ void Car_SwapDeviceID(void)
 }
 
 /**
-  * @brief  »ñÈ¡µ±Ç°×óÂÖÉè±¸ºÅ
-  * @param  ÎŞ
-  * @retval ×óÂÖÉè±¸ºÅ
+  * @brief  è·å–å½“å‰å·¦è½®è®¾å¤‡å·
+  * @param  æ— 
+  * @retval å·¦è½®è®¾å¤‡å·
   */
 uint8_t Car_GetLeftDevID(void)
 {
@@ -108,9 +109,9 @@ uint8_t Car_GetLeftDevID(void)
 }
 
 /**
-  * @brief  »ñÈ¡µ±Ç°ÓÒÂÖÉè±¸ºÅ
-  * @param  ÎŞ
-  * @retval ÓÒÂÖÉè±¸ºÅ
+  * @brief  è·å–å½“å‰å³è½®è®¾å¤‡å·
+  * @param  æ— 
+  * @retval å³è½®è®¾å¤‡å·
   */
 uint8_t Car_GetRightDevID(void)
 {
@@ -118,21 +119,21 @@ uint8_t Car_GetRightDevID(void)
 }
 
 /**
-  * @brief  ·¢ËÍµç»úÎ»ÒÆÃüÁî£¨ÄÚ²¿º¯Êı£©
-  * @param  dev_id: Éè±¸ºÅ
-  * @param  displacement: Î»ÒÆÖµ£¨µ¥Î»£ºmm£¬ÕıÊı»ò¸ºÊı£©
-  * @retval ÎŞ
+  * @brief  å‘é€ç”µæœºä½ç§»å‘½ä»¤ï¼ˆå†…éƒ¨å‡½æ•°ï¼‰
+  * @param  dev_id: è®¾å¤‡å·
+  * @param  displacement: ä½ç§»å€¼ï¼ˆå•ä½ï¼šmmï¼Œæ­£æ•°æˆ–è´Ÿæ•°ï¼‰
+  * @retval æ— 
   */
 static void Car_SendDisplacement(uint8_t dev_id, float displacement)
 {
-    /* ½« mm ×ª»»Îª 0.1mm µ¥Î»µÄÕûÊı£¨²¹Âë£© */
+    /* å°† mm è½¬æ¢ä¸º 0.1mm å•ä½çš„æ•´æ•°ï¼ˆè¡¥ç ï¼‰ */
     int32_t displacement_raw = (int32_t)(displacement * 10.0f);
     
     uint8_t cmd[6];
-    cmd[0] = (uint8_t)(displacement_raw & 0xFF);         /* µÍ×Ö½Ú */
+    cmd[0] = (uint8_t)(displacement_raw & 0xFF);         /* ä½å­—èŠ‚ */
     cmd[1] = (uint8_t)((displacement_raw >> 8) & 0xFF);
     cmd[2] = (uint8_t)((displacement_raw >> 16) & 0xFF);
-    cmd[3] = (uint8_t)((displacement_raw >> 24) & 0xFF); /* ¸ß×Ö½Ú */
+    cmd[3] = (uint8_t)((displacement_raw >> 24) & 0xFF); /* é«˜å­—èŠ‚ */
     cmd[4] = dev_id;
     cmd[5] = 0x00;
     
@@ -140,72 +141,80 @@ static void Car_SendDisplacement(uint8_t dev_id, float displacement)
 }
 
 /**
-  * @brief  Ğ¡³µÇ°½ø
-  * @param  distance: Ç°½ø¾àÀë£¨µ¥Î»£ºmm£¬ÕıÊı£©
-  * @retval ÎŞ
-  * @note   Ç°½ø£º×óÂÖ¸ºÊıÎ»ÒÆ£¬ÓÒÂÖÕıÊıÎ»ÒÆ
+  * @brief  å°è½¦å‰è¿›
+  * @param  distance: å‰è¿›è·ç¦»ï¼ˆå•ä½ï¼šmmï¼Œæ­£æ•°ï¼‰
+  * @retval æ— 
+  * @note   å‰è¿›ï¼šå·¦è½®è´Ÿæ•°ä½ç§»ï¼Œå³è½®æ­£æ•°ä½ç§»
   */
 void Car_MoveForward(float distance)
 {
-    /* ×óÂÖ¸ºÊıÎ»ÒÆ£¬ÓÒÂÖÕıÊıÎ»ÒÆ */
+    /* å·¦è½®è´Ÿæ•°ä½ç§»ï¼Œå³è½®æ­£æ•°ä½ç§» */
     Car_SendDisplacement(current_left_dev, -distance);
+	osDelay(1);
     Car_SendDisplacement(current_right_dev, distance);
+	osDelay(1);
 }
 
 /**
-  * @brief  Ğ¡³µºóÍË
-  * @param  distance: ºóÍË¾àÀë£¨µ¥Î»£ºmm£¬ÕıÊı£©
-  * @retval ÎŞ
-  * @note   ºóÍË£º×óÂÖÕıÊıÎ»ÒÆ£¬ÓÒÂÖ¸ºÊıÎ»ÒÆ
+  * @brief  å°è½¦åé€€
+  * @param  distance: åé€€è·ç¦»ï¼ˆå•ä½ï¼šmmï¼Œæ­£æ•°ï¼‰
+  * @retval æ— 
+  * @note   åé€€ï¼šå·¦è½®æ­£æ•°ä½ç§»ï¼Œå³è½®è´Ÿæ•°ä½ç§»
   */
 void Car_MoveBackward(float distance)
 {
-    /* ×óÂÖÕıÊıÎ»ÒÆ£¬ÓÒÂÖ¸ºÊıÎ»ÒÆ */
+    /* å·¦è½®æ­£æ•°ä½ç§»ï¼Œå³è½®è´Ÿæ•°ä½ç§» */
     Car_SendDisplacement(current_left_dev, distance);
+	osDelay(1);
     Car_SendDisplacement(current_right_dev, -distance);
+	osDelay(1);
 }
 
 /**
-  * @brief  Ğ¡³µ×ó×ª
-  * @param  distance: ×ª¶¯¾àÀë£¨µ¥Î»£ºmm£¬ÕıÊı£©
-  * @retval ÎŞ
-  * @note   ×ó×ª£ºÁ½¸öÂÖ×Ó¶¼ÊÇÕıÊıÎ»ÒÆ
+  * @brief  å°è½¦å·¦è½¬
+  * @param  distance: è½¬åŠ¨è·ç¦»ï¼ˆå•ä½ï¼šmmï¼Œæ­£æ•°ï¼‰
+  * @retval æ— 
+  * @note   å·¦è½¬ï¼šä¸¤ä¸ªè½®å­éƒ½æ˜¯æ­£æ•°ä½ç§»
   */
 void Car_TurnLeft(float distance)
 {
-    /* Á½¸ö¶¼ÊÇÕıÊıÎ»ÒÆ */
+    /* ä¸¤ä¸ªéƒ½æ˜¯æ­£æ•°ä½ç§» */
     Car_SendDisplacement(current_left_dev, distance);
+	osDelay(1);
     Car_SendDisplacement(current_right_dev, distance);
+	osDelay(1);
 }
 
 /**
-  * @brief  Ğ¡³µÓÒ×ª
-  * @param  distance: ×ª¶¯¾àÀë£¨µ¥Î»£ºmm£¬ÕıÊı£©
-  * @retval ÎŞ
-  * @note   ÓÒ×ª£ºÁ½¸öÂÖ×Ó¶¼ÊÇ¸ºÊıÎ»ÒÆ
+  * @brief  å°è½¦å³è½¬
+  * @param  distance: è½¬åŠ¨è·ç¦»ï¼ˆå•ä½ï¼šmmï¼Œæ­£æ•°ï¼‰
+  * @retval æ— 
+  * @note   å³è½¬ï¼šä¸¤ä¸ªè½®å­éƒ½æ˜¯è´Ÿæ•°ä½ç§»
   */
 void Car_TurnRight(float distance)
 {
-    /* Á½¸ö¶¼ÊÇ¸ºÊıÎ»ÒÆ */
+    /* ä¸¤ä¸ªéƒ½æ˜¯è´Ÿæ•°ä½ç§» */
     Car_SendDisplacement(current_left_dev, -distance);
+	osDelay(1);
     Car_SendDisplacement(current_right_dev, -distance);
+	osDelay(1);
 }
 
 /**
-  * @brief  ÉèÖÃÂÖ¾¶
-  * @param  dev_id: Éè±¸ºÅ
-  * @param  diameter: ÂÖ¾¶£¨µ¥Î»£º0.01mm£©
-  * @retval ÎŞ
+  * @brief  è®¾ç½®è½®å¾„
+  * @param  dev_id: è®¾å¤‡å·
+  * @param  diameter: è½®å¾„ï¼ˆå•ä½ï¼š0.01mmï¼‰
+  * @retval æ— 
   */
 void Car_SetWheelDiameter(uint8_t dev_id, uint16_t diameter)
 {
     uint8_t cmd[4];
     cmd[0] = dev_id;
     cmd[1] = 0x24;
-    cmd[2] = (uint8_t)(diameter & 0xFF);        /* µÍ×Ö½Ú */
-    cmd[3] = (uint8_t)((diameter >> 8) & 0xFF); /* ¸ß×Ö½Ú */
+    cmd[2] = (uint8_t)(diameter & 0xFF);        /* ä½å­—èŠ‚ */
+    cmd[3] = (uint8_t)((diameter >> 8) & 0xFF); /* é«˜å­—èŠ‚ */
     
-    /* Á¬Ğø·¢ËÍ3±é */
+    /* è¿ç»­å‘é€3é */
     for (int i = 0; i < 3; i++)
     {
         CAN_SendData(0x408, cmd, 4);
@@ -214,49 +223,49 @@ void Car_SetWheelDiameter(uint8_t dev_id, uint16_t diameter)
 }
 
 /**
-  * @brief  ÉèÖÃ¼ÓËÙ¶È
-  * @param  dev_id: Éè±¸ºÅ
-  * @param  acceleration: ¼ÓËÙ¶È£¨µ¥Î»£º0.1mm/s?£©
-  * @retval ÎŞ
+  * @brief  è®¾ç½®åŠ é€Ÿåº¦
+  * @param  dev_id: è®¾å¤‡å·
+  * @param  acceleration: åŠ é€Ÿåº¦ï¼ˆå•ä½ï¼š0.1mm/sÂ²ï¼‰
+  * @retval æ— 
   */
 void Car_SetAcceleration(uint8_t dev_id, uint32_t acceleration)
 {
     uint8_t cmd[5];
-    cmd[0] = (uint8_t)(acceleration & 0xFF);         /* µÍ×Ö½Ú */
+    cmd[0] = (uint8_t)(acceleration & 0xFF);         /* ä½å­—èŠ‚ */
     cmd[1] = (uint8_t)((acceleration >> 8) & 0xFF);
     cmd[2] = (uint8_t)((acceleration >> 16) & 0xFF);
-    cmd[3] = (uint8_t)((acceleration >> 24) & 0xFF); /* ¸ß×Ö½Ú */
+    cmd[3] = (uint8_t)((acceleration >> 24) & 0xFF); /* é«˜å­—èŠ‚ */
     cmd[4] = dev_id;
     
-    /* Á¬Ğø·¢ËÍ3±é */
+    /* è¿ç»­å‘é€3é */
     for (int i = 0; i < 3; i++)
     {
-        CAN_SendData(0x408, cmd, 5);
+        CAN_SendData(0x414, cmd, 5);
         osDelay(2);
     }
 }
 
 /**
-  * @brief  ÉèÖÃËÙ¶È
-  * @param  dev_id: Éè±¸ºÅ
-  * @param  velocity: ËÙ¶È£¨µ¥Î»£º0.1mm/s£©
-  * @retval ÎŞ
+  * @brief  è®¾ç½®é€Ÿåº¦
+  * @param  dev_id: è®¾å¤‡å·
+  * @param  velocity: é€Ÿåº¦ï¼ˆå•ä½ï¼š0.1mm/sï¼‰
+  * @retval æ— 
   */
 void Car_SetVelocity(uint8_t dev_id, uint32_t velocity)
 {
     uint8_t cmd[5];
-    cmd[0] = (uint8_t)(velocity & 0xFF);         /* µÍ×Ö½Ú */
+    cmd[0] = (uint8_t)(velocity & 0xFF);         /* ä½å­—èŠ‚ */
     cmd[1] = (uint8_t)((velocity >> 8) & 0xFF);
     cmd[2] = (uint8_t)((velocity >> 16) & 0xFF);
-    cmd[3] = (uint8_t)((velocity >> 24) & 0xFF); /* ¸ß×Ö½Ú */
+    cmd[3] = (uint8_t)((velocity >> 24) & 0xFF); /* é«˜å­—èŠ‚ */
     cmd[4] = dev_id;
     
-    /* Á¬Ğø·¢ËÍ3±é */
+    /* è¿ç»­å‘é€3é */
     for (int i = 0; i < 3; i++)
     {
-        CAN_SendData(0x408, cmd, 5);
+        CAN_SendData(0x415, cmd, 5);
         osDelay(2);
     }
 }
 
-/* ÈÎÎñÊµÏÖÒÑÒÆÖÁ NewGyroscope.c */
+/* ä»»åŠ¡å®ç°å·²ç§»è‡³ NewGyroscope.c */
