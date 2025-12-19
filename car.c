@@ -191,4 +191,72 @@ void Car_TurnRight(float distance)
     Car_SendDisplacement(current_right_dev, -distance);
 }
 
+/**
+  * @brief  设置轮径
+  * @param  dev_id: 设备号
+  * @param  diameter: 轮径（单位：0.01mm）
+  * @retval 无
+  */
+void Car_SetWheelDiameter(uint8_t dev_id, uint16_t diameter)
+{
+    uint8_t cmd[4];
+    cmd[0] = dev_id;
+    cmd[1] = 0x24;
+    cmd[2] = (uint8_t)(diameter & 0xFF);        /* 低字节 */
+    cmd[3] = (uint8_t)((diameter >> 8) & 0xFF); /* 高字节 */
+    
+    /* 连续发送3遍 */
+    for (int i = 0; i < 3; i++)
+    {
+        CAN_SendData(0x408, cmd, 4);
+        osDelay(2);
+    }
+}
+
+/**
+  * @brief  设置加速度
+  * @param  dev_id: 设备号
+  * @param  acceleration: 加速度（单位：0.1mm/s?）
+  * @retval 无
+  */
+void Car_SetAcceleration(uint8_t dev_id, uint32_t acceleration)
+{
+    uint8_t cmd[5];
+    cmd[0] = (uint8_t)(acceleration & 0xFF);         /* 低字节 */
+    cmd[1] = (uint8_t)((acceleration >> 8) & 0xFF);
+    cmd[2] = (uint8_t)((acceleration >> 16) & 0xFF);
+    cmd[3] = (uint8_t)((acceleration >> 24) & 0xFF); /* 高字节 */
+    cmd[4] = dev_id;
+    
+    /* 连续发送3遍 */
+    for (int i = 0; i < 3; i++)
+    {
+        CAN_SendData(0x408, cmd, 5);
+        osDelay(2);
+    }
+}
+
+/**
+  * @brief  设置速度
+  * @param  dev_id: 设备号
+  * @param  velocity: 速度（单位：0.1mm/s）
+  * @retval 无
+  */
+void Car_SetVelocity(uint8_t dev_id, uint32_t velocity)
+{
+    uint8_t cmd[5];
+    cmd[0] = (uint8_t)(velocity & 0xFF);         /* 低字节 */
+    cmd[1] = (uint8_t)((velocity >> 8) & 0xFF);
+    cmd[2] = (uint8_t)((velocity >> 16) & 0xFF);
+    cmd[3] = (uint8_t)((velocity >> 24) & 0xFF); /* 高字节 */
+    cmd[4] = dev_id;
+    
+    /* 连续发送3遍 */
+    for (int i = 0; i < 3; i++)
+    {
+        CAN_SendData(0x408, cmd, 5);
+        osDelay(2);
+    }
+}
+
 /* 任务实现已移至 NewGyroscope.c */

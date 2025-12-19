@@ -70,6 +70,35 @@ void Car_TurnLeft(float distance);
   */
 void Car_TurnRight(float distance);
 
+/* ========== 电机参数设置接口 ========== */
+
+/**
+  * @brief  设置轮径
+  * @param  dev_id: 设备号（CAR_DEV_LEFT 或 CAR_DEV_RIGHT）
+  * @param  diameter: 轮径（单位：0.01mm）
+  * @retval 无
+  * @note   例如：25.75mm 应传入 2575
+  */
+void Car_SetWheelDiameter(uint8_t dev_id, uint16_t diameter);
+
+/**
+  * @brief  设置加速度
+  * @param  dev_id: 设备号（CAR_DEV_LEFT 或 CAR_DEV_RIGHT）
+  * @param  acceleration: 加速度（单位：0.1mm/s?）
+  * @retval 无
+  * @note   例如：2000mm/s? 应传入 20000
+  */
+void Car_SetAcceleration(uint8_t dev_id, uint32_t acceleration);
+
+/**
+  * @brief  设置速度
+  * @param  dev_id: 设备号（CAR_DEV_LEFT 或 CAR_DEV_RIGHT）
+  * @param  velocity: 速度（单位：0.1mm/s）
+  * @retval 无
+  * @note   例如：1000mm/s 应传入 10000
+  */
+void Car_SetVelocity(uint8_t dev_id, uint32_t velocity);
+
 #ifdef __cplusplus
 }
 #endif

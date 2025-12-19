@@ -125,11 +125,10 @@ void Car_LockTask(void const *argument)
             case CAR_STATE_INIT_MOTOR:
                 /* 状态说明：发送电机初始化参数（ID 0x316），格式为
                    B4 BF CF AA 00 5F DEV DEV（共 8 字节），分别初始化左、右电机。
-                   然后设置轮径（ID 0x408），格式为：设备号 + 0x24 + 轮径值（2字节小端，单位0.01mm）
-                   轮径设置连续发送3遍以提高可靠性
+                   然后设置轮径、加速度和速度
                 */
                 {
-                    /* 1. 发送电机初始化参数（各发送1遍） */
+                    /* 1. 发送电机初始化参数 */
                     uint8_t buf_left[8] = {0xB4, 0xBF, 0xCF, 0xAA, 0x00, 0x5F, CAR_DEV_LEFT, CAR_DEV_LEFT};
                     CAN_SendData(0x316, buf_left, 8);
                     osDelay(2);
@@ -138,33 +137,17 @@ void Car_LockTask(void const *argument)
                     CAN_SendData(0x316, buf_right, 8);
                     osDelay(2);
 
-                    /* 2. 设置轮径为 25.75mm（连续3遍） */
-                    /* 轮径 25.75mm = 2575 * 0.01mm，转换为整数 2575 */
-                    uint16_t wheel_diameter = 2575;  /* 单位：0.01mm */
-                    
-                    /* 设置左轮轮径 */
-                    uint8_t wheel_cmd_left[4];
-                    wheel_cmd_left[0] = CAR_DEV_LEFT;
-                    wheel_cmd_left[1] = 0x24;
-                    wheel_cmd_left[2] = (uint8_t)(wheel_diameter & 0xFF);        /* 低字节 */
-                    wheel_cmd_left[3] = (uint8_t)((wheel_diameter >> 8) & 0xFF); /* 高字节 */
-                    for (int i = 0; i < 3; i++)
-                    {
-                        CAN_SendData(0x408, wheel_cmd_left, 4);
-                        osDelay(2);
-                    }
+                    /* 2. 设置轮径为 25.75mm */
+                    Car_SetWheelDiameter(CAR_DEV_LEFT, 2575);   /* 2575 = 25.75mm / 0.01mm */
+                    Car_SetWheelDiameter(CAR_DEV_RIGHT, 2575);
 
-                    /* 设置右轮轮径 */
-                    uint8_t wheel_cmd_right[4];
-                    wheel_cmd_right[0] = CAR_DEV_RIGHT;
-                    wheel_cmd_right[1] = 0x24;
-                    wheel_cmd_right[2] = (uint8_t)(wheel_diameter & 0xFF);        /* 低字节 */
-                    wheel_cmd_right[3] = (uint8_t)((wheel_diameter >> 8) & 0xFF); /* 高字节 */
-                    for (int i = 0; i < 3; i++)
-                    {
-                        CAN_SendData(0x408, wheel_cmd_right, 4);
-                        osDelay(2);
-                    }
+                    /* 3. 设置加速度为 2000 mm/s? */
+                    Car_SetAcceleration(CAR_DEV_LEFT, 20000);   /* 20000 = 2000mm/s? / 0.1mm/s? */
+                    Car_SetAcceleration(CAR_DEV_RIGHT, 20000);
+
+                    /* 4. 设置速度为 1000 mm/s */
+                    Car_SetVelocity(CAR_DEV_LEFT, 10000);       /* 10000 = 1000mm/s / 0.1mm/s */
+                    Car_SetVelocity(CAR_DEV_RIGHT, 10000);
 
                     car_state = CAR_STATE_CALIBRATE_WHEEL; /* 跳转到轮子校准状态 */
                 }
