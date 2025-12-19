@@ -118,9 +118,9 @@ static void CAN_FilterConfig(void)
 	
 	/* 配置接收的标准ID（需要左移5位） */
 	sFilterConfig.FilterIdHigh = (0x312 << 5);            /* ID 0x312 */
-	sFilterConfig.FilterIdLow = (0x312 << 5);             /* ID 0x312 (重复) */
+	sFilterConfig.FilterIdLow = (0x409 << 5);             /* ID 0x409 */
 	sFilterConfig.FilterMaskIdHigh = (0x312 << 5);        /* ID 0x312 (重复) */
-	sFilterConfig.FilterMaskIdLow = (0x312 << 5);         /* ID 0x312 (重复) */
+	sFilterConfig.FilterMaskIdLow = (0x409 << 5);         /* ID 0x409 (重复) */
 	
 	sFilterConfig.FilterFIFOAssignment = CAN_RX_FIFO0;
 	sFilterConfig.FilterActivation = ENABLE;

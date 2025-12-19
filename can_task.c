@@ -89,9 +89,10 @@ void CAN_ControlTask(void const *argument)
             /* 清除全局接收标志 */
             CAN_RxFlag = 0;
 
-            if (id == 0x312 && len == 7)
+            /* 处理 0x312（SN 上报）和 0x409（电机位移）消息 */
+            if ((id == 0x312 && len == 7) || (id == 0x409 && len == 8))
             {
-                /* 将小车 SN 帧放入队列，供 Car_LockTask 处理 */
+                /* 将消息放入队列，供 Car_LockTask 处理 */
                 carMsg.id = id;
                 carMsg.len = len;
                 memcpy(carMsg.data, localData, len);
