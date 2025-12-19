@@ -142,6 +142,8 @@ static void CAN_FilterConfig(void)
 void CAN_SendData(uint32_t id, uint8_t *pData, uint8_t len)
 {
 	uint32_t TxMailbox;
+	HAL_StatusTypeDef status;
+	uint32_t timeout = 100;  /* 最多等待100次 × 1ms = 100ms */
 
 	/* 准备发送头 */
 	TxHeader.StdId = id;
@@ -151,10 +153,18 @@ void CAN_SendData(uint32_t id, uint8_t *pData, uint8_t len)
 	TxHeader.DLC = len;
 	TxHeader.TransmitGlobalTime = DISABLE;
 
-	/* 发送CAN消息 */
-	if (HAL_CAN_AddTxMessage(&hcan, &TxHeader, pData, &TxMailbox) != HAL_OK)
-	{
-		/* 发送请求错误 */
+	/* 尝试发送CAN消息，如果邮箱满则等待重试 */
+	do {
+		status = HAL_CAN_AddTxMessage(&hcan, &TxHeader, pData, &TxMailbox);
+		if (status == HAL_BUSY) {
+			/* 发送邮箱满，延时1ms后重试 */
+			HAL_Delay(1);
+			timeout--;
+		}
+	} while (status == HAL_BUSY && timeout > 0);
+	
+	if (status != HAL_OK) {
+		/* 发送失败 */
 	}
 }
 

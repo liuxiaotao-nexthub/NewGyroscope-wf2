@@ -11,8 +11,10 @@
 #include "car_task.h"
 #include "car.h"
 #include "can.h"
+#include "tim.h"
 #include <../CMSIS_RTOS/cmsis_os.h>
 #include <string.h>
+#include <math.h>
 
 /* External variables --------------------------------------------------------*/
 extern osMessageQId CarCanQueueHandle;
@@ -320,7 +322,7 @@ void Car_LockTask(void const *argument)
 }
 
 /**
-  * @brief  小车运行测试任务：前进/后退循环测试
+  * @brief  小车运行测试任务：旋转测试（左转/右转180°往复）
   * @param  argument 未使用
   * @retval 无
   */
@@ -330,17 +332,83 @@ void Car_TestTask(void const *argument)
     
     /* 任务启动时立即挂起，等待锁定任务解挂 */
     vTaskSuspend(NULL);
-	float test_distance = 500.0f; /* 测试距离 500mm (50cm) */ 
+    
+    float target_angle = 180.0f;  /* 目标旋转角度 180° */
+    float turn_distance = 2000.0f; /* 发送一个大的位移值 2m，让电机持续转动 */
     
     for (;;)
     {
-        /* 前进 50cm */
-	    Car_MoveForward(test_distance);
-        osDelay(3000);  /* 等待 3 秒完成运动 */
-	   
-	    /* 后退 50cm */
-	    Car_MoveBackward(test_distance);
-	    osDelay(3000);  /* 等待 3 秒完成运动 */
+        /* ========== 左转 180° ========== */
+        float prev_angle = TIM_GetAngle();  /* 记录上一次的角度 */
+        float accumulated_angle = 0.0f;     /* 累加的角度变化 */
+        
+        /* 发送左转命令（大位移，速度 500 mm/s） */
+        Car_TurnLeft(turn_distance);
+        
+        /* 每 20ms 检查一次角度变化，直到累计达到目标角度 */
+        while (1)
+        {
+            osDelay(20);  /* 20ms 检查周期 */
+            
+            float current_angle = TIM_GetAngle();  /* 当前角度（已归一化） */
+            float delta = current_angle - prev_angle;
+            
+            /* 处理角度跨越边界的情况 */
+            if (delta > 180.0f) {
+                delta -= 360.0f;
+            } else if (delta < -180.0f) {
+                delta += 360.0f;
+            }
+            
+            /* 累加角度变化（左转应该是正值累加） */
+            accumulated_angle += delta;
+            prev_angle = current_angle;
+            
+            /* 判断是否达到目标角度 */
+            if (accumulated_angle >= target_angle) {
+                Car_Stop();  /* 停止旋转 */
+                break;
+            }
+        }
+        
+        /* 等待 5 秒后开始右转 */
+        osDelay(3000);
+        
+        /* ========== 右转 180° ========== */
+        prev_angle = TIM_GetAngle();  /* 记录上一次的角度 */
+        accumulated_angle = 0.0f;     /* 累加的角度变化 */
+        
+        /* 发送右转命令（大位移，速度 500 mm/s） */
+        Car_TurnRight(turn_distance);
+        
+        /* 每 20ms 检查一次角度变化，直到累计达到目标角度 */
+        while (1)
+        {
+            osDelay(20);  /* 20ms 检查周期 */
+            
+            float current_angle = TIM_GetAngle();  /* 当前角度（已归一化） */
+            float delta = current_angle - prev_angle;
+            
+            /* 处理角度跨越边界的情况 */
+            if (delta > 180.0f) {
+                delta -= 360.0f;
+            } else if (delta < -180.0f) {
+                delta += 360.0f;
+            }
+            
+            /* 累加角度变化（右转应该是负值累加） */
+            accumulated_angle += delta;
+            prev_angle = current_angle;
+            
+            /* 判断是否达到目标角度（右转累加的是负值） */
+            if (accumulated_angle <= -target_angle) {
+                Car_Stop();  /* 停止旋转 */
+                break;
+            }
+        }
+        
+        /* 等待 5 秒后开始下一轮 */
+        osDelay(3000);
     }
 }
 

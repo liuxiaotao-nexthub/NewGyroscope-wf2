@@ -9,17 +9,17 @@ extern "C" {
 #include "cmsis_os.h"
 
 /* 零漂估计参数（环形缓冲与滑动窗口） */
-#define ZEROBUF_SIZE 1000               /* 滑动窗口大小：1000样本 × 2ms = 2秒 */
+#define ZEROBUF_SIZE 300               /* 滑动窗口大小：1000样本 × 2ms = 2秒 */
 #define STABLE_CHECK_TIMES 5            /* 分5段，每段200个样本 */
-#define SEGMENT_SIZE 100                /* 每段的样本数 */
+#define SEGMENT_SIZE 50                /* 每段的样本数 */
 
 /* 静止检测参数 */
 #define VAR_THRESHOLD 5.0f
-#define MEAN_THRESHOLD 0.038f
+#define MEAN_THRESHOLD 0.1f
 
 
 /* bias EMA 滤波参数 */
-#define BIAS_EMA_ALPHA 0.1f             /* EMA 系数: 0.1 = 10% 新值 + 90% 旧值 */
+#define BIAS_EMA_ALPHA 1.0f             /* EMA 系数: 0.1 = 10% 新值 + 90% 旧值 */
 
 /* 积分状态结构体 */
 typedef struct {

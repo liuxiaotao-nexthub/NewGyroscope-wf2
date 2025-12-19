@@ -148,6 +148,10 @@ static void Car_SendDisplacement(uint8_t dev_id, float displacement)
   */
 void Car_MoveForward(float distance)
 {
+    /* 重新设置速度和加速度 */
+    Car_SetVelocity(current_left_dev, 10000);       /* 1000 mm/s */
+    Car_SetVelocity(current_right_dev, 10000);
+    
     /* 左轮负数位移，右轮正数位移 */
     Car_SendDisplacement(current_left_dev, -distance);
 	osDelay(1);
@@ -163,6 +167,10 @@ void Car_MoveForward(float distance)
   */
 void Car_MoveBackward(float distance)
 {
+    /* 重新设置速度和加速度 */
+    Car_SetVelocity(current_left_dev, 10000);       /* 1000 mm/s */
+    Car_SetVelocity(current_right_dev, 10000);
+    
     /* 左轮正数位移，右轮负数位移 */
     Car_SendDisplacement(current_left_dev, distance);
 	osDelay(1);
@@ -178,11 +186,22 @@ void Car_MoveBackward(float distance)
   */
 void Car_TurnLeft(float distance)
 {
-    /* 两个都是正数位移 */
-    Car_SendDisplacement(current_left_dev, distance);
-	osDelay(1);
-    Car_SendDisplacement(current_right_dev, distance);
-	osDelay(1);
+    /* 重新设置速度和加速度（旋转速度 500 mm/s） */
+    Car_SetVelocity(current_left_dev, 2500);       /* 500 mm/s */
+	Car_SetVelocity(current_right_dev, 2500);
+    
+    /* 两个都是正数位移，连续发送3遍 */
+    for (int i = 0; i < 3; i++)
+    {
+        Car_SendDisplacement(current_left_dev, distance);
+        osDelay(1);
+    }
+    
+    for (int i = 0; i < 3; i++)
+    {
+        Car_SendDisplacement(current_right_dev, distance);
+        osDelay(1);
+    }
 }
 
 /**
@@ -193,11 +212,39 @@ void Car_TurnLeft(float distance)
   */
 void Car_TurnRight(float distance)
 {
-    /* 两个都是负数位移 */
-    Car_SendDisplacement(current_left_dev, -distance);
-	osDelay(1);
-    Car_SendDisplacement(current_right_dev, -distance);
-	osDelay(1);
+    /* 重新设置速度和加速度（旋转速度 500 mm/s） */
+	Car_SetVelocity(current_left_dev, 2500);       /* 500 mm/s */
+	Car_SetVelocity(current_right_dev, 2500);
+    
+    /* 两个都是负数位移，连续发送3遍 */
+    for (int i = 0; i < 3; i++)
+    {
+        Car_SendDisplacement(current_left_dev, -distance);
+        osDelay(1);
+    }
+    
+    for (int i = 0; i < 3; i++)
+    {
+        Car_SendDisplacement(current_right_dev, -distance);
+        osDelay(1);
+    }
+}
+
+/**
+  * @brief  小车停止
+  * @param  无
+  * @retval 无
+  * @note   停止：发送位移为 0
+  */
+void Car_Stop(void)
+{
+    /* 发送左轮位移为 0 */
+    Car_SendDisplacement(current_left_dev, 0.1f);
+    osDelay(1);
+    
+    /* 发送右轮位移为 0 */
+    Car_SendDisplacement(current_right_dev, 0.1f);
+    osDelay(1);
 }
 
 /**
