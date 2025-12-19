@@ -36,6 +36,40 @@ uint8_t Car_GetLeftDevID(void);
 /* 获取当前右轮设备号 */
 uint8_t Car_GetRightDevID(void);
 
+/* ========== 电机运动控制接口 ========== */
+
+/**
+  * @brief  小车前进
+  * @param  distance: 前进距离（单位：mm，正数）
+  * @retval 无
+  * @note   前进：左轮负数位移，右轮正数位移
+  */
+void Car_MoveForward(float distance);
+
+/**
+  * @brief  小车后退
+  * @param  distance: 后退距离（单位：mm，正数）
+  * @retval 无
+  * @note   后退：左轮正数位移，右轮负数位移
+  */
+void Car_MoveBackward(float distance);
+
+/**
+  * @brief  小车左转
+  * @param  distance: 转动距离（单位：mm，正数）
+  * @retval 无
+  * @note   左转：两个轮子都是正数位移
+  */
+void Car_TurnLeft(float distance);
+
+/**
+  * @brief  小车右转
+  * @param  distance: 转动距离（单位：mm，正数）
+  * @retval 无
+  * @note   右转：两个轮子都是负数位移
+  */
+void Car_TurnRight(float distance);
+
 #ifdef __cplusplus
 }
 #endif

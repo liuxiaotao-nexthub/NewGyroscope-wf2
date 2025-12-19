@@ -117,4 +117,78 @@ uint8_t Car_GetRightDevID(void)
     return current_right_dev;
 }
 
+/**
+  * @brief  发送电机位移命令（内部函数）
+  * @param  dev_id: 设备号
+  * @param  displacement: 位移值（单位：mm，正数或负数）
+  * @retval 无
+  */
+static void Car_SendDisplacement(uint8_t dev_id, float displacement)
+{
+    /* 将 mm 转换为 0.1mm 单位的整数（补码） */
+    int32_t displacement_raw = (int32_t)(displacement * 10.0f);
+    
+    uint8_t cmd[6];
+    cmd[0] = (uint8_t)(displacement_raw & 0xFF);         /* 低字节 */
+    cmd[1] = (uint8_t)((displacement_raw >> 8) & 0xFF);
+    cmd[2] = (uint8_t)((displacement_raw >> 16) & 0xFF);
+    cmd[3] = (uint8_t)((displacement_raw >> 24) & 0xFF); /* 高字节 */
+    cmd[4] = dev_id;
+    cmd[5] = 0x00;
+    
+    CAN_SendData(0x416, cmd, 6);
+}
+
+/**
+  * @brief  小车前进
+  * @param  distance: 前进距离（单位：mm，正数）
+  * @retval 无
+  * @note   前进：左轮负数位移，右轮正数位移
+  */
+void Car_MoveForward(float distance)
+{
+    /* 左轮负数位移，右轮正数位移 */
+    Car_SendDisplacement(current_left_dev, -distance);
+    Car_SendDisplacement(current_right_dev, distance);
+}
+
+/**
+  * @brief  小车后退
+  * @param  distance: 后退距离（单位：mm，正数）
+  * @retval 无
+  * @note   后退：左轮正数位移，右轮负数位移
+  */
+void Car_MoveBackward(float distance)
+{
+    /* 左轮正数位移，右轮负数位移 */
+    Car_SendDisplacement(current_left_dev, distance);
+    Car_SendDisplacement(current_right_dev, -distance);
+}
+
+/**
+  * @brief  小车左转
+  * @param  distance: 转动距离（单位：mm，正数）
+  * @retval 无
+  * @note   左转：两个轮子都是正数位移
+  */
+void Car_TurnLeft(float distance)
+{
+    /* 两个都是正数位移 */
+    Car_SendDisplacement(current_left_dev, distance);
+    Car_SendDisplacement(current_right_dev, distance);
+}
+
+/**
+  * @brief  小车右转
+  * @param  distance: 转动距离（单位：mm，正数）
+  * @retval 无
+  * @note   右转：两个轮子都是负数位移
+  */
+void Car_TurnRight(float distance)
+{
+    /* 两个都是负数位移 */
+    Car_SendDisplacement(current_left_dev, -distance);
+    Car_SendDisplacement(current_right_dev, -distance);
+}
+
 /* 任务实现已移至 NewGyroscope.c */
