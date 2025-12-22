@@ -152,11 +152,19 @@ void Car_MoveForward(float distance)
     Car_SetVelocity(current_left_dev, 10000);       /* 1000 mm/s */
     Car_SetVelocity(current_right_dev, 10000);
     
-    /* 左轮负数位移，右轮正数位移 */
-    Car_SendDisplacement(current_left_dev, -distance);
-	osDelay(1);
-    Car_SendDisplacement(current_right_dev, distance);
-	osDelay(1);
+    /* 左轮负数位移，连续发送3遍 */
+    for (int i = 0; i < 3; i++)
+    {
+        Car_SendDisplacement(current_left_dev, -distance);
+        osDelay(1);
+    }
+    
+    /* 右轮正数位移，连续发送3遍 */
+    for (int i = 0; i < 3; i++)
+    {
+        Car_SendDisplacement(current_right_dev, distance);
+        osDelay(1);
+    }
 }
 
 /**
@@ -171,49 +179,31 @@ void Car_MoveBackward(float distance)
     Car_SetVelocity(current_left_dev, 10000);       /* 1000 mm/s */
     Car_SetVelocity(current_right_dev, 10000);
     
-    /* 左轮正数位移，右轮负数位移 */
-    Car_SendDisplacement(current_left_dev, distance);
-	osDelay(1);
-    Car_SendDisplacement(current_right_dev, -distance);
-	osDelay(1);
-}
-
-/**
-  * @brief  小车左转
-  * @param  distance: 转动距离（单位：mm，正数）
-  * @retval 无
-  * @note   左转：两个轮子都是正数位移
-  */
-void Car_TurnLeft(float distance)
-{
-    /* 重新设置速度和加速度（旋转速度 500 mm/s） */
-    Car_SetVelocity(current_left_dev, 2500);       /* 500 mm/s */
-	Car_SetVelocity(current_right_dev, 2500);
-    
-    /* 两个都是正数位移，连续发送3遍 */
+    /* 左轮正数位移，连续发送3遍 */
     for (int i = 0; i < 3; i++)
     {
         Car_SendDisplacement(current_left_dev, distance);
         osDelay(1);
     }
     
+    /* 右轮负数位移，连续发送3遍 */
     for (int i = 0; i < 3; i++)
     {
-        Car_SendDisplacement(current_right_dev, distance);
+        Car_SendDisplacement(current_right_dev, -distance);
         osDelay(1);
     }
 }
 
 /**
-  * @brief  小车右转
+  * @brief  小车左转
   * @param  distance: 转动距离（单位：mm，正数）
   * @retval 无
-  * @note   右转：两个轮子都是负数位移
+  * @note   左转：两个轮子都是负数位移
   */
-void Car_TurnRight(float distance)
+void Car_TurnLeft(float distance)
 {
     /* 重新设置速度和加速度（旋转速度 500 mm/s） */
-	Car_SetVelocity(current_left_dev, 2500);       /* 500 mm/s */
+    Car_SetVelocity(current_left_dev, 2500);       /* 500 mm/s */
 	Car_SetVelocity(current_right_dev, 2500);
     
     /* 两个都是负数位移，连续发送3遍 */
@@ -226,6 +216,32 @@ void Car_TurnRight(float distance)
     for (int i = 0; i < 3; i++)
     {
         Car_SendDisplacement(current_right_dev, -distance);
+        osDelay(1);
+    }
+}
+
+/**
+  * @brief  小车右转
+  * @param  distance: 转动距离（单位：mm，正数）
+  * @retval 无
+  * @note   右转：两个轮子都是正数位移
+  */
+void Car_TurnRight(float distance)
+{
+    /* 重新设置速度和加速度（旋转速度 500 mm/s） */
+	Car_SetVelocity(current_left_dev, 2500);       /* 500 mm/s */
+	Car_SetVelocity(current_right_dev, 2500);
+    
+    /* 两个都是正数位移，连续发送3遍 */
+    for (int i = 0; i < 3; i++)
+    {
+        Car_SendDisplacement(current_left_dev, distance);
+        osDelay(1);
+    }
+    
+    for (int i = 0; i < 3; i++)
+    {
+        Car_SendDisplacement(current_right_dev, distance);
         osDelay(1);
     }
 }
