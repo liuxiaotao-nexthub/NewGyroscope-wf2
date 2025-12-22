@@ -5,6 +5,10 @@
 
 /* 该文件作为小车底层驱动接口，任务实现已移至 NewGyroscope.c，后续在此添加硬件相关实现 */
 
+/* 外部全局变量声明（定义在 car_task.c） */
+extern float g_linear_velocity;     /* 直线运动速度 (mm/s) */
+extern float g_rotation_velocity;   /* 旋转速度 (mm/s) */
+extern float g_acceleration;        /* 加速度 (mm/s²) */
 
 osThreadId CarLockTaskHandle = NULL;
 osThreadId CarTestTaskHandle = NULL;
@@ -148,9 +152,10 @@ static void Car_SendDisplacement(uint8_t dev_id, float displacement)
   */
 void Car_MoveForward(float distance)
 {
-    /* 重新设置速度和加速度 */
-    Car_SetVelocity(current_left_dev, 10000);       /* 1000 mm/s */
-    Car_SetVelocity(current_right_dev, 10000);
+    /* 使用全局变量设置速度 */
+    uint32_t velocity = (uint32_t)(g_linear_velocity * 10.0f);  /* 转换为 0.1mm/s */
+    Car_SetVelocity(current_left_dev, velocity);
+    Car_SetVelocity(current_right_dev, velocity);
     
     /* 左轮负数位移，连续发送3遍 */
     for (int i = 0; i < 3; i++)
@@ -175,9 +180,10 @@ void Car_MoveForward(float distance)
   */
 void Car_MoveBackward(float distance)
 {
-    /* 重新设置速度和加速度 */
-    Car_SetVelocity(current_left_dev, 10000);       /* 1000 mm/s */
-    Car_SetVelocity(current_right_dev, 10000);
+    /* 使用全局变量设置速度 */
+    uint32_t velocity = (uint32_t)(g_linear_velocity * 10.0f);  /* 转换为 0.1mm/s */
+    Car_SetVelocity(current_left_dev, velocity);
+    Car_SetVelocity(current_right_dev, velocity);
     
     /* 左轮正数位移，连续发送3遍 */
     for (int i = 0; i < 3; i++)
@@ -202,9 +208,10 @@ void Car_MoveBackward(float distance)
   */
 void Car_TurnLeft(float distance)
 {
-    /* 重新设置速度和加速度（旋转速度 500 mm/s） */
-    Car_SetVelocity(current_left_dev, 2500);       /* 500 mm/s */
-	Car_SetVelocity(current_right_dev, 2500);
+    /* 使用全局变量设置旋转速度 */
+    uint32_t velocity = (uint32_t)(g_rotation_velocity * 10.0f);  /* 转换为 0.1mm/s */
+    Car_SetVelocity(current_left_dev, velocity);
+	Car_SetVelocity(current_right_dev, velocity);
     
     /* 两个都是负数位移，连续发送3遍 */
     for (int i = 0; i < 3; i++)
@@ -228,9 +235,10 @@ void Car_TurnLeft(float distance)
   */
 void Car_TurnRight(float distance)
 {
-    /* 重新设置速度和加速度（旋转速度 500 mm/s） */
-	Car_SetVelocity(current_left_dev, 2500);       /* 500 mm/s */
-	Car_SetVelocity(current_right_dev, 2500);
+    /* 使用全局变量设置旋转速度 */
+    uint32_t velocity = (uint32_t)(g_rotation_velocity * 10.0f);  /* 转换为 0.1mm/s */
+	Car_SetVelocity(current_left_dev, velocity);
+	Car_SetVelocity(current_right_dev, velocity);
     
     /* 两个都是正数位移，连续发送3遍 */
     for (int i = 0; i < 3; i++)

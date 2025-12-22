@@ -38,6 +38,14 @@ typedef enum {
 } CarState_t;
 
 /* Private variables ---------------------------------------------------------*/
+/* 运动参数全局变量（可在GDB调试时修改） */
+float g_linear_velocity = 1000.0f;      /* 直线运动速度 (mm/s) */
+float g_rotation_velocity = 250.0f;     /* 旋转速度 (mm/s) */
+float g_acceleration = 1000.0f;         /* 加速度 (mm/s?) */
+float g_test_distance = 500.0f;         /* 测试距离 (mm) */
+float g_turn_distance = 2000.0f;        /* 旋转位移 (mm) */
+float g_target_angle = 180.0f;          /* 目标旋转角度 (度) */
+
 /* Private function prototypes -----------------------------------------------*/
 /* Private functions ---------------------------------------------------------*/
 
@@ -333,16 +341,14 @@ void Car_TestTask(void const *argument)
     /* 任务启动时立即挂起，等待锁定任务解挂 */
     vTaskSuspend(NULL);
     
-    float test_distance = 500.0f; /* 测试距离 500mm (50cm) */
-    
     for (;;)
     {
-        /* 前进 50cm */
-        Car_MoveForward(test_distance);
+        /* 前进（使用全局变量 g_test_distance） */
+        Car_MoveForward(g_test_distance);
         osDelay(3000);  /* 等待 3 秒完成运动 */
         
-        /* 后退 50cm */
-        Car_MoveBackward(test_distance);
+        /* 后退（使用全局变量 g_test_distance） */
+        Car_MoveBackward(g_test_distance);
         osDelay(3000);  /* 等待 3 秒完成运动 */
     }
 }
@@ -354,15 +360,12 @@ void Car_TestTask(void const *argument)
     
     vTaskSuspend(NULL);
     
-    float target_angle = 180.0f;
-    float turn_distance = 2000.0f;
-    
     for (;;)
     {
         float prev_angle = TIM_GetAngle();
         float accumulated_angle = 0.0f;
         
-        Car_TurnLeft(turn_distance);
+        Car_TurnLeft(g_turn_distance);
         
         while (1)
         {
@@ -380,7 +383,7 @@ void Car_TestTask(void const *argument)
             accumulated_angle += delta;
             prev_angle = current_angle;
             
-            if (accumulated_angle >= target_angle) {
+            if (accumulated_angle >= g_target_angle) {
                 Car_Stop();
                 break;
             }
@@ -391,7 +394,7 @@ void Car_TestTask(void const *argument)
         prev_angle = TIM_GetAngle();
         accumulated_angle = 0.0f;
         
-        Car_TurnRight(turn_distance);
+        Car_TurnRight(g_turn_distance);
         
         while (1)
         {
@@ -409,7 +412,7 @@ void Car_TestTask(void const *argument)
             accumulated_angle += delta;
             prev_angle = current_angle;
             
-            if (accumulated_angle <= -target_angle) {
+            if (accumulated_angle <= -g_target_angle) {
                 Car_Stop();
                 break;
             }

@@ -71,14 +71,6 @@ void Car_TurnLeft(float distance);
   */
 void Car_TurnRight(float distance);
 
-/**
-  * @brief  小车停止
-  * @param  无
-  * @retval 无
-  * @note   停止：发送位移为 0
-  */
-void Car_Stop(void);
-
 /* ========== 电机参数设置接口 ========== */
 
 /**
