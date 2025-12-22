@@ -157,16 +157,11 @@ void Car_MoveForward(float distance)
     Car_SetVelocity(current_left_dev, velocity);
     Car_SetVelocity(current_right_dev, velocity);
     
-    /* 左轮负数位移，连续发送3遍 */
+    /* 左轮负数位移、右轮正数位移，连续发送3遍（每次发送左右各一次） */
     for (int i = 0; i < 3; i++)
     {
         Car_SendDisplacement(current_left_dev, -distance);
         osDelay(1);
-    }
-    
-    /* 右轮正数位移，连续发送3遍 */
-    for (int i = 0; i < 3; i++)
-    {
         Car_SendDisplacement(current_right_dev, distance);
         osDelay(1);
     }
@@ -185,16 +180,11 @@ void Car_MoveBackward(float distance)
     Car_SetVelocity(current_left_dev, velocity);
     Car_SetVelocity(current_right_dev, velocity);
     
-    /* 左轮正数位移，连续发送3遍 */
+    /* 左轮正数位移、右轮负数位移，连续发送3遍（每次发送左右各一次） */
     for (int i = 0; i < 3; i++)
     {
         Car_SendDisplacement(current_left_dev, distance);
         osDelay(1);
-    }
-    
-    /* 右轮负数位移，连续发送3遍 */
-    for (int i = 0; i < 3; i++)
-    {
         Car_SendDisplacement(current_right_dev, -distance);
         osDelay(1);
     }
@@ -211,17 +201,13 @@ void Car_TurnLeft(float distance)
     /* 使用全局变量设置旋转速度 */
     uint32_t velocity = (uint32_t)(g_rotation_velocity * 10.0f);  /* 转换为 0.1mm/s */
     Car_SetVelocity(current_left_dev, velocity);
-	Car_SetVelocity(current_right_dev, velocity);
+    Car_SetVelocity(current_right_dev, velocity);
     
-    /* 两个都是负数位移，连续发送3遍 */
+    /* 两个都是负数位移，连续发送3遍（每次发送左右各一次） */
     for (int i = 0; i < 3; i++)
     {
         Car_SendDisplacement(current_left_dev, -distance);
         osDelay(1);
-    }
-    
-    for (int i = 0; i < 3; i++)
-    {
         Car_SendDisplacement(current_right_dev, -distance);
         osDelay(1);
     }
@@ -237,18 +223,14 @@ void Car_TurnRight(float distance)
 {
     /* 使用全局变量设置旋转速度 */
     uint32_t velocity = (uint32_t)(g_rotation_velocity * 10.0f);  /* 转换为 0.1mm/s */
-	Car_SetVelocity(current_left_dev, velocity);
-	Car_SetVelocity(current_right_dev, velocity);
+    Car_SetVelocity(current_left_dev, velocity);
+    Car_SetVelocity(current_right_dev, velocity);
     
-    /* 两个都是正数位移，连续发送3遍 */
+    /* 两个都是正数位移，连续发送3遍（每次发送左右各一次） */
     for (int i = 0; i < 3; i++)
     {
         Car_SendDisplacement(current_left_dev, distance);
         osDelay(1);
-    }
-    
-    for (int i = 0; i < 3; i++)
-    {
         Car_SendDisplacement(current_right_dev, distance);
         osDelay(1);
     }

@@ -100,6 +100,9 @@ void Car_SetAcceleration(uint8_t dev_id, uint32_t acceleration);
   */
 void Car_SetVelocity(uint8_t dev_id, uint32_t velocity);
 
+/* 停止运动：发送位移为0 */
+void Car_Stop(void);
+
 #ifdef __cplusplus
 }
 #endif

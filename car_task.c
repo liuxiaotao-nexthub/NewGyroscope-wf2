@@ -42,7 +42,7 @@ typedef enum {
 float g_linear_velocity = 1000.0f;      /* 直线运动速度 (mm/s) */
 float g_rotation_velocity = 250.0f;     /* 旋转速度 (mm/s) */
 float g_acceleration = 1000.0f;         /* 加速度 (mm/s?) */
-float g_test_distance = 500.0f;         /* 测试距离 (mm) */
+float g_test_distance = 1000.0f;         /* 测试距离 (mm) */
 float g_turn_distance = 2000.0f;        /* 旋转位移 (mm) */
 float g_target_angle = 180.0f;          /* 目标旋转角度 (度) */
 
@@ -330,97 +330,59 @@ void Car_LockTask(void const *argument)
 }
 
 /**
-  * @brief  小车运行测试任务：前进/后退循环测试
+  * @brief  小车运行测试任务：前进 g_test_distance -> 左转 g_turn_distance 循环
   * @param  argument 未使用
   * @retval 无
+  * @note   不检查运动完成，仅使用固定延时 3 秒
   */
 void Car_TestTask(void const *argument)
 {
     (void)argument;
-    
+
     /* 任务启动时立即挂起，等待锁定任务解挂 */
     vTaskSuspend(NULL);
-    
+
     for (;;)
     {
-        /* 前进（使用全局变量 g_test_distance） */
+        /* 前进 g_test_distance */
         Car_MoveForward(g_test_distance);
-        osDelay(3000);  /* 等待 3 秒完成运动 */
-        
-        /* 后退（使用全局变量 g_test_distance） */
-        Car_MoveBackward(g_test_distance);
-        osDelay(3000);  /* 等待 3 秒完成运动 */
-    }
-}
+        osDelay(3000); /* 固定等待 3 秒 */
 
-/* 旋转测试任务（已注释）
-void Car_TestTask(void const *argument)
-{
-    (void)argument;
-    
-    vTaskSuspend(NULL);
-    
-    for (;;)
-    {
-        float prev_angle = TIM_GetAngle();
-        float accumulated_angle = 0.0f;
-        
-        Car_TurnLeft(g_turn_distance);
-        
-        while (1)
+        /* 左转：使用角度判断，每10ms检查一次 */
         {
-            osDelay(20);
-            
-            float current_angle = TIM_GetAngle();
-            float delta = current_angle - prev_angle;
-            
-            if (delta > 180.0f) {
-                delta -= 360.0f;
-            } else if (delta < -180.0f) {
-                delta += 360.0f;
-            }
-            
-            accumulated_angle += delta;
-            prev_angle = current_angle;
-            
-            if (accumulated_angle >= g_target_angle) {
-                Car_Stop();
-                break;
+            float prev_angle = TIM_GetAngle();
+            float accumulated_angle = 0.0f;
+
+            /* 发送左转命令（开始旋转） */
+            Car_TurnLeft(g_turn_distance);
+
+            /* 每10ms检查一次角度变化并累加，直到达到目标角度 */
+            while (1)
+            {
+                osDelay(10);
+
+                float current_angle = TIM_GetAngle();
+                float delta = current_angle - prev_angle;
+
+                /* 处理跨越 ±180° 边界 */
+                if (delta > 180.0f) {
+                    delta -= 360.0f;
+                } else if (delta < -180.0f) {
+                    delta += 360.0f;
+                }
+
+                accumulated_angle += fabsf(delta);
+                prev_angle = current_angle;
+
+                if (accumulated_angle >= g_target_angle)
+                {
+                    Car_Stop();
+                    break;
+                }
             }
         }
-        
-        osDelay(3000);
-        
-        prev_angle = TIM_GetAngle();
-        accumulated_angle = 0.0f;
-        
-        Car_TurnRight(g_turn_distance);
-        
-        while (1)
-        {
-            osDelay(20);
-            
-            float current_angle = TIM_GetAngle();
-            float delta = current_angle - prev_angle;
-            
-            if (delta > 180.0f) {
-                delta -= 360.0f;
-            } else if (delta < -180.0f) {
-                delta += 360.0f;
-            }
-            
-            accumulated_angle += delta;
-            prev_angle = current_angle;
-            
-            if (accumulated_angle <= -g_target_angle) {
-                Car_Stop();
-                break;
-            }
-        }
-        
-        osDelay(3000);
+
+        /* 小间隔，确保角度稳定 */
+        osDelay(500);
     }
 }
-*/
-
-/************************ 文件结束 ****/
