@@ -39,10 +39,10 @@ typedef enum {
 
 /* Private variables ---------------------------------------------------------*/
 /* 运动参数全局变量（可在GDB调试时修改） */
-float g_linear_velocity = 1000.0f;      /* 直线运动速度 (mm/s) */
-float g_rotation_velocity = 250.0f;     /* 旋转速度 (mm/s) */
+float g_linear_velocity = 600.0f;      /* 直线运动速度 (mm/s) */
+float g_rotation_velocity = 200.0f;     /* 旋转速度 (mm/s) */
 float g_acceleration = 1000.0f;         /* 加速度 (mm/s?) */
-float g_test_distance = 1000.0f;         /* 测试距离 (mm) */
+float g_test_distance = 3000.0f;         /* 测试距离 (mm) */
 float g_turn_distance = 2000.0f;        /* 旋转位移 (mm) */
 float g_target_angle = 180.0f;          /* 目标旋转角度 (度) */
 
@@ -346,7 +346,7 @@ void Car_TestTask(void const *argument)
     {
         /* 前进 g_test_distance */
         Car_MoveForward(g_test_distance);
-        osDelay(3000); /* 固定等待 3 秒 */
+        osDelay(10000); /* 固定等待 3 秒 */
 
         /* 左转：使用角度判断，每10ms检查一次 */
         {

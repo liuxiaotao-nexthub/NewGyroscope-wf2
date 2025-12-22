@@ -143,8 +143,8 @@ int main(void)
 	/* Initialize TIM2 for 2ms integration interrupts */
 	TIM2_Init();
 
-	/* 创建小车 CAN 消息队列（队列深度 4） */
-	osMessageQDef(carCanQueue, 4, CarCanMsg_t);
+	/* 创建小车 CAN 消息队列（队列深度 2） */
+	osMessageQDef(carCanQueue, 2, CarCanMsg_t);
 	CarCanQueueHandle = osMessageCreate(osMessageQ(carCanQueue), NULL);
 
 	/* Create CAN send task */

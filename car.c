@@ -244,13 +244,16 @@ void Car_TurnRight(float distance)
   */
 void Car_Stop(void)
 {
-    /* 发送左轮位移为 0 */
-    Car_SendDisplacement(current_left_dev, 0.1f);
-    osDelay(1);
-    
-    /* 发送右轮位移为 0 */
-    Car_SendDisplacement(current_right_dev, 0.1f);
-    osDelay(1);
+    /* 发送位移为 0，连续发送3遍（每次发送左右各一次） */
+    for (int i = 0; i < 3; i++)
+    {
+        /* 左轮 */
+        Car_SendDisplacement(current_left_dev, 0.1f);
+        osDelay(1);
+        /* 右轮 */
+        Car_SendDisplacement(current_right_dev, 0.1f);
+        osDelay(1);
+    }
 }
 
 /**
