@@ -327,4 +327,71 @@ void Car_SetVelocity(uint8_t dev_id, uint32_t velocity)
     }
 }
 
+/**
+  * @brief  设置从位移
+  * @param  dev_id: 设备号
+  * @param  displacement: 从位移（单位：mm，正数或负数）
+  * @retval 无
+  */
+void Car_SetSlaveDisplacement(uint8_t dev_id, float displacement)
+{
+    /* 将 mm 转换为 0.1mm 单位的整数（补码） */
+    int32_t displacement_raw = (int32_t)(displacement * 10.0f);
+    
+    uint8_t cmd[5];
+    cmd[0] = (uint8_t)(displacement_raw & 0xFF);         /* 低字节 */
+    cmd[1] = (uint8_t)((displacement_raw >> 8) & 0xFF);
+    cmd[2] = (uint8_t)((displacement_raw >> 16) & 0xFF);
+    cmd[3] = (uint8_t)((displacement_raw >> 24) & 0xFF); /* 高字节 */
+    cmd[4] = dev_id;
+    
+    CAN_SendData(0x419, cmd, 5);
+}
+
+/**
+  * @brief  设置从速度
+  * @param  dev_id: 设备号
+  * @param  velocity: 从速度（单位：0.1mm/s）
+  * @retval 无
+  */
+void Car_SetSlaveVelocity(uint8_t dev_id, uint32_t velocity)
+{
+    uint8_t cmd[5];
+    cmd[0] = (uint8_t)(velocity & 0xFF);         /* 低字节 */
+    cmd[1] = (uint8_t)((velocity >> 8) & 0xFF);
+    cmd[2] = (uint8_t)((velocity >> 16) & 0xFF);
+    cmd[3] = (uint8_t)((velocity >> 24) & 0xFF); /* 高字节 */
+    cmd[4] = dev_id;
+    
+    /* 连续发送2遍 */
+    for (int i = 0; i < 2; i++)
+    {
+        CAN_SendData(0x418, cmd, 5);
+        osDelay(1);
+    }
+}
+
+/**
+  * @brief  设置从加速度
+  * @param  dev_id: 设备号
+  * @param  acceleration: 从加速度（单位：0.1mm/s²）
+  * @retval 无
+  */
+void Car_SetSlaveAcceleration(uint8_t dev_id, uint32_t acceleration)
+{
+    uint8_t cmd[5];
+    cmd[0] = (uint8_t)(acceleration & 0xFF);         /* 低字节 */
+    cmd[1] = (uint8_t)((acceleration >> 8) & 0xFF);
+    cmd[2] = (uint8_t)((acceleration >> 16) & 0xFF);
+    cmd[3] = (uint8_t)((acceleration >> 24) & 0xFF); /* 高字节 */
+    cmd[4] = dev_id;
+    
+    /* 连续发送2遍 */
+    for (int i = 0; i < 2; i++)
+    {
+        CAN_SendData(0x417, cmd, 5);
+        osDelay(1);
+    }
+}
+
 /* 任务实现已移至 NewGyroscope.c */

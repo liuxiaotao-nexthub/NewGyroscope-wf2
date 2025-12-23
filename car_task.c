@@ -159,6 +159,14 @@ void Car_LockTask(void const *argument)
                     Car_SetVelocity(CAR_DEV_LEFT, (uint32_t)(g_linear_velocity * 10.0f));
                     Car_SetVelocity(CAR_DEV_RIGHT, (uint32_t)(g_linear_velocity * 10.0f));
 
+                    /* 5. 设置从加速度为 g_acceleration（以 0.1 单位发送） */
+                    Car_SetSlaveAcceleration(CAR_DEV_LEFT, (uint32_t)(g_acceleration * 10.0f));
+                    Car_SetSlaveAcceleration(CAR_DEV_RIGHT, (uint32_t)(g_acceleration * 10.0f));
+
+                    /* 6. 设置从速度为 g_linear_velocity（以 0.1mm/s 单位发送） */
+                    Car_SetSlaveVelocity(CAR_DEV_LEFT, (uint32_t)(g_linear_velocity * 10.0f));
+                    Car_SetSlaveVelocity(CAR_DEV_RIGHT, (uint32_t)(g_linear_velocity * 10.0f));
+
                     car_state = CAR_STATE_CALIBRATE_WHEEL; /* 跳转到轮子校准状态 */
                 }
                 break;
@@ -303,7 +311,7 @@ void Car_TestTask(void const *argument)
     {
         /* 前进 g_test_distance */
         Car_MoveForward(g_test_distance);
-        osDelay(12000); /* 固定等待 3 秒 */
+        osDelay(12000); /* 固定等待 12 秒 */
 
         /* 右转：使用角度判断，每10ms检查一次 */
         {

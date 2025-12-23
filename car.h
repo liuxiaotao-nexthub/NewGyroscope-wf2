@@ -100,6 +100,33 @@ void Car_SetAcceleration(uint8_t dev_id, uint32_t acceleration);
   */
 void Car_SetVelocity(uint8_t dev_id, uint32_t velocity);
 
+/**
+  * @brief  设置从位移
+  * @param  dev_id: 设备号（CAR_DEV_LEFT 或 CAR_DEV_RIGHT）
+  * @param  displacement: 从位移（单位：mm，正数或负数）
+  * @retval 无
+  * @note   例如：100mm 应传入 100.0f，转换为 0.1mm 单位发送
+  */
+void Car_SetSlaveDisplacement(uint8_t dev_id, float displacement);
+
+/**
+  * @brief  设置从速度
+  * @param  dev_id: 设备号（CAR_DEV_LEFT 或 CAR_DEV_RIGHT）
+  * @param  velocity: 从速度（单位：0.1mm/s）
+  * @retval 无
+  * @note   例如：1000mm/s 应传入 10000
+  */
+void Car_SetSlaveVelocity(uint8_t dev_id, uint32_t velocity);
+
+/**
+  * @brief  设置从加速度
+  * @param  dev_id: 设备号（CAR_DEV_LEFT 或 CAR_DEV_RIGHT）
+  * @param  acceleration: 从加速度（单位：0.1mm/s?）
+  * @retval 无
+  * @note   例如：1000mm/s? 应传入 10000
+  */
+void Car_SetSlaveAcceleration(uint8_t dev_id, uint32_t acceleration);
+
 /* 停止运动：发送位移为0 */
 void Car_Stop(void);
 
