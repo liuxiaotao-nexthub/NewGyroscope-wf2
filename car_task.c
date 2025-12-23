@@ -1,9 +1,9 @@
 /**
   ******************************************************************************
   * @file    car_task.c
-  * @author  Ó¦ÓÃÍÅ¶Ó
-  * @brief   Ğ¡³µ¿ØÖÆÈÎÎñÊµÏÖ
-  *          °üº¬Ğ¡³µ°ó¶¨¡¢³õÊ¼»¯¡¢Ğ£×¼ºÍÊ¹ÄÜµÈ×´Ì¬»úÂß¼­
+  * @author  åº”ç”¨å›¢é˜Ÿ
+  * @brief   å°è½¦æ§åˆ¶ä»»åŠ¡å®ç°
+  *          åŒ…å«å°è½¦ç»‘å®šã€åˆå§‹åŒ–ã€æ ¡å‡†å’Œä½¿èƒ½ç­‰çŠ¶æ€æœºé€»è¾‘
   ******************************************************************************
   */
 
@@ -20,39 +20,39 @@
 extern osMessageQId CarCanQueueHandle;
 
 /* Private typedef -----------------------------------------------------------*/
-/* Ğ¡³µ¶ÓÁĞÏûÏ¢½á¹¹ */
+/* å°è½¦é˜Ÿåˆ—æ¶ˆæ¯ç»“æ„ */
 typedef struct {
-    uint32_t id;       /* CAN ÏûÏ¢ ID */
-    uint8_t data[8];   /* CAN Êı¾İ£¨×î¶à 8 ×Ö½Ú£© */
-    uint8_t len;       /* Êı¾İ³¤¶È */
+    uint32_t id;       /* CAN æ¶ˆæ¯ ID */
+    uint8_t data[8];   /* CAN æ•°æ®ï¼ˆæœ€å¤š 8 å­—èŠ‚ï¼‰ */
+    uint8_t len;       /* æ•°æ®é•¿åº¦ */
 } CarCanMsg_t;
 
-/* Ğ¡³µ×´Ì¬»ú×´Ì¬¶¨Òå */
+/* å°è½¦çŠ¶æ€æœºçŠ¶æ€å®šä¹‰ */
 typedef enum {
-    CAR_STATE_IDLE = 0,         /* ¿ÕÏĞ×´Ì¬£¨Î´Ê¹ÓÃ£© */
-    CAR_STATE_BINDING_SN,       /* °ó¶¨ SN ×´Ì¬£ºµÈ´ı½ÓÊÕ×óÓÒÂÖ SN£¨ID 0x312£©²¢·¢ËÍ°ó¶¨ÃüÁî£¨ID 0x313£© */
-    CAR_STATE_INIT_MOTOR,       /* µç»ú³õÊ¼»¯×´Ì¬£º·¢ËÍµç»ú²ÎÊı³õÊ¼»¯ÃüÁî£¨ID 0x316£© */
-    CAR_STATE_CALIBRATE_WHEEL,  /* ÂÖ×ÓĞ£×¼×´Ì¬£º¶ÁÈ¡µç»úÎ»ÒÆ²¢ÅĞ¶Ï×óÓÒÂÖ */
-    CAR_STATE_ENABLE_POWER,     /* ÉÏµçÊ¹ÄÜ×´Ì¬£º·¢ËÍµçÔ´Ê¹ÄÜÃüÁî£¨ID 0x413£©²¢·¢ËÍËø¶¨ÃüÁî£¨ID 0x60D£© */
-    CAR_STATE_DONE              /* Íê³É×´Ì¬£ºÈÎÎñ×Ô¹ÒÆğ */
+    CAR_STATE_IDLE = 0,         /* ç©ºé—²çŠ¶æ€ï¼ˆæœªä½¿ç”¨ï¼‰ */
+    CAR_STATE_BINDING_SN,       /* ç»‘å®š SN çŠ¶æ€ï¼šç­‰å¾…æ¥æ”¶å·¦å³è½® SNï¼ˆID 0x312ï¼‰å¹¶å‘é€ç»‘å®šå‘½ä»¤ï¼ˆID 0x313ï¼‰ */
+    CAR_STATE_INIT_MOTOR,       /* ç”µæœºåˆå§‹åŒ–çŠ¶æ€ï¼šå‘é€ç”µæœºå‚æ•°åˆå§‹åŒ–å‘½ä»¤ï¼ˆID 0x316ï¼‰ */
+    CAR_STATE_CALIBRATE_WHEEL,  /* è½®å­æ ¡å‡†çŠ¶æ€ï¼šè¯»å–ç”µæœºä½ç§»å¹¶åˆ¤æ–­å·¦å³è½® */
+    CAR_STATE_ENABLE_POWER,     /* ä¸Šç”µä½¿èƒ½çŠ¶æ€ï¼šå‘é€ç”µæºä½¿èƒ½å‘½ä»¤ï¼ˆID 0x413ï¼‰å¹¶å‘é€é”å®šå‘½ä»¤ï¼ˆID 0x60Dï¼‰ */
+    CAR_STATE_DONE              /* å®ŒæˆçŠ¶æ€ï¼šä»»åŠ¡è‡ªæŒ‚èµ· */
 } CarState_t;
 
 /* Private variables ---------------------------------------------------------*/
-/* ÔË¶¯²ÎÊıÈ«¾Ö±äÁ¿£¨¿ÉÔÚGDBµ÷ÊÔÊ±ĞŞ¸Ä£© */
-float g_linear_velocity = 600.0f;      /* Ö±ÏßÔË¶¯ËÙ¶È (mm/s) */
-float g_rotation_velocity = 200.0f;     /* Ğı×ªËÙ¶È (mm/s) */
-float g_acceleration = 1000.0f;         /* ¼ÓËÙ¶È (mm/s?) */
-float g_test_distance = 3000.0f;         /* ²âÊÔ¾àÀë (mm) */
-float g_turn_distance = 2000.0f;        /* Ğı×ªÎ»ÒÆ (mm) */
-float g_target_angle = 180.0f;          /* Ä¿±êĞı×ª½Ç¶È (¶È) */
+/* è¿åŠ¨å‚æ•°å…¨å±€å˜é‡ï¼ˆå¯åœ¨GDBè°ƒè¯•æ—¶ä¿®æ”¹ï¼‰ */
+float g_linear_velocity = 1000.0f;      /* ç›´çº¿è¿åŠ¨é€Ÿåº¦ (mm/s) */
+float g_rotation_velocity = 600.0f;     /* æ—‹è½¬é€Ÿåº¦ (mm/s) */
+float g_acceleration = 2000.0f;         /* åŠ é€Ÿåº¦ (mm/s?) */
+float g_test_distance = 5000.0f;         /* æµ‹è¯•è·ç¦» (mm) */
+float g_turn_distance = 620.0f;        /* æ—‹è½¬ä½ç§» (mm) */
+float g_target_angle = 180.0f;          /* ç›®æ ‡æ—‹è½¬è§’åº¦ (åº¦) */
 
 /* Private function prototypes -----------------------------------------------*/
 /* Private functions ---------------------------------------------------------*/
 
 /**
-  * @brief  Ğ¡³µËø¶¨ÈÎÎñ£º´Ó¶ÓÁĞ½ÓÊÕ CAN Ö¡²¢°´×´Ì¬»ú´¦Àí
-  * @param  argument Î´Ê¹ÓÃ
-  * @retval ÎŞ
+  * @brief  å°è½¦é”å®šä»»åŠ¡ï¼šä»é˜Ÿåˆ—æ¥æ”¶ CAN å¸§å¹¶æŒ‰çŠ¶æ€æœºå¤„ç†
+  * @param  argument æœªä½¿ç”¨
+  * @retval æ— 
   */
 void Car_LockTask(void const *argument)
 {
@@ -60,7 +60,7 @@ void Car_LockTask(void const *argument)
 
     CarState_t car_state = CAR_STATE_BINDING_SN;
 
-    /* ´æ´¢×óÓÒÂÖ SN£¬Ã¿¸ö SN 7 ×Ö½Ú */
+    /* å­˜å‚¨å·¦å³è½® SNï¼Œæ¯ä¸ª SN 7 å­—èŠ‚ */
     uint8_t sn_left[7] = {0};
     uint8_t sn_right[7] = {0};
     int have_left = 0;
@@ -73,12 +73,12 @@ void Car_LockTask(void const *argument)
         switch (car_state)
         {
             case CAR_STATE_BINDING_SN:
-                /* ×´Ì¬ËµÃ÷£ºµÈ´ıÍ¨¹ı¶ÓÁĞ½ÓÊÕ ID=0x312 µÄ 7 ×Ö½Ú SN ÉÏ±¨£¬
-                   ÏÈµ½µÄÎª×óÂÖ£¨°ó¶¨ÎªÉè±¸ºÅ 0x01£©£¬ËæºóÎªÓÒÂÖ£¨°ó¶¨ÎªÉè±¸ºÅ 0x02£©¡£
-                   ÊÕµ½Ã¿¸ö SN ºó·¢ËÍ°ó¶¨ÃüÁî£¨ID 0x313£¬7 ×Ö½Ú SN + 1 ×Ö½ÚÉè±¸ºÅ£©¡£
-                   Èç¹û 100ms ÄÚÎ´ÊÕµ½Êı¾İ£¬Ö÷¶¯·¢ËÍ²éÑ¯ÃüÁî£¨ID 0x60D£¬Êı¾İ 07 00£©¡£
+                /* çŠ¶æ€è¯´æ˜ï¼šç­‰å¾…é€šè¿‡é˜Ÿåˆ—æ¥æ”¶ ID=0x312 çš„ 7 å­—èŠ‚ SN ä¸ŠæŠ¥ï¼Œ
+                   å…ˆåˆ°çš„ä¸ºå·¦è½®ï¼ˆç»‘å®šä¸ºè®¾å¤‡å· 0x01ï¼‰ï¼Œéšåä¸ºå³è½®ï¼ˆç»‘å®šä¸ºè®¾å¤‡å· 0x02ï¼‰ã€‚
+                   æ”¶åˆ°æ¯ä¸ª SN åå‘é€ç»‘å®šå‘½ä»¤ï¼ˆID 0x313ï¼Œ7 å­—èŠ‚ SN + 1 å­—èŠ‚è®¾å¤‡å·ï¼‰ã€‚
+                   å¦‚æœ 100ms å†…æœªæ”¶åˆ°æ•°æ®ï¼Œä¸»åŠ¨å‘é€æŸ¥è¯¢å‘½ä»¤ï¼ˆID 0x60Dï¼Œæ•°æ® 07 00ï¼‰ã€‚
                 */
-                evt = osMessageGet(CarCanQueueHandle, 100); /* µÈ´ı 100ms */
+                evt = osMessageGet(CarCanQueueHandle, 100); /* ç­‰å¾… 100ms */
                 if (evt.status == osEventMessage)
                 {
                     CarCanMsg_t *pMsg = (CarCanMsg_t *)evt.value.p;
@@ -88,7 +88,7 @@ void Car_LockTask(void const *argument)
                         {
                             memcpy(sn_left, pMsg->data, 7);
                             have_left = 1;
-                            /* ·¢ËÍ×óÂÖ°ó¶¨ÃüÁî£¨Á¬Ğø·¢ËÍ3±é£© */
+                            /* å‘é€å·¦è½®ç»‘å®šå‘½ä»¤ï¼ˆè¿ç»­å‘é€3éï¼‰ */
                             uint8_t buf[8];
                             memcpy(buf, sn_left, 7);
                             buf[7] = CAR_DEV_LEFT;
@@ -100,12 +100,12 @@ void Car_LockTask(void const *argument)
                         }
                         else if (!have_right)
                         {
-                            /* ÅĞ¶Ï½ÓÊÕµ½µÄ SN Óë×óÂÖ SN ÊÇ·ñ²»Í¬ */
+                            /* åˆ¤æ–­æ¥æ”¶åˆ°çš„ SN ä¸å·¦è½® SN æ˜¯å¦ä¸åŒ */
                             if (memcmp(sn_left, pMsg->data, 7) != 0)
                             {
                                 memcpy(sn_right, pMsg->data, 7);
                                 have_right = 1;
-                                /* ·¢ËÍÓÒÂÖ°ó¶¨ÃüÁî£¨Á¬Ğø·¢ËÍ3±é£© */
+                                /* å‘é€å³è½®ç»‘å®šå‘½ä»¤ï¼ˆè¿ç»­å‘é€3éï¼‰ */
                                 uint8_t buf[8];
                                 memcpy(buf, sn_right, 7);
                                 buf[7] = CAR_DEV_RIGHT;
@@ -115,30 +115,30 @@ void Car_LockTask(void const *argument)
                                     osDelay(2);
                                 }
                             }
-                            /* Èç¹û SN ÏàÍ¬£¬ºöÂÔ´ËÏûÏ¢£¬¼ÌĞøµÈ´ı */
+                            /* å¦‚æœ SN ç›¸åŒï¼Œå¿½ç•¥æ­¤æ¶ˆæ¯ï¼Œç»§ç»­ç­‰å¾… */
                         }
 
                         if (have_left && have_right)
                         {
-                            car_state = CAR_STATE_INIT_MOTOR; /* ½øÈëµç»ú³õÊ¼»¯×´Ì¬ */
+                            car_state = CAR_STATE_INIT_MOTOR; /* è¿›å…¥ç”µæœºåˆå§‹åŒ–çŠ¶æ€ */
                         }
                     }
                 }
                 else if (evt.status == osEventTimeout)
                 {
-                    /* 100ms ³¬Ê±Î´ÊÕµ½Êı¾İ£¬Ö÷¶¯·¢ËÍ²éÑ¯ÃüÁî */
+                    /* 100ms è¶…æ—¶æœªæ”¶åˆ°æ•°æ®ï¼Œä¸»åŠ¨å‘é€æŸ¥è¯¢å‘½ä»¤ */
                     uint8_t queryCmd[2] = {0x07, 0x00};
                     CAN_SendData(0x60D, queryCmd, 2);
                 }
                 break;
 
             case CAR_STATE_INIT_MOTOR:
-                /* ×´Ì¬ËµÃ÷£º·¢ËÍµç»ú³õÊ¼»¯²ÎÊı£¨ID 0x316£©£¬¸ñÊ½Îª
-                   B4 BF CF AA 00 5F DEV DEV£¨¹² 8 ×Ö½Ú£©£¬·Ö±ğ³õÊ¼»¯×ó¡¢ÓÒµç»ú¡£
-                   È»ºóÉèÖÃÂÖ¾¶¡¢¼ÓËÙ¶ÈºÍËÙ¶È
+                /* çŠ¶æ€è¯´æ˜ï¼šå‘é€ç”µæœºåˆå§‹åŒ–å‚æ•°ï¼ˆID 0x316ï¼‰ï¼Œæ ¼å¼ä¸º
+                   B4 BF CF AA 00 5F DEV DEVï¼ˆå…± 8 å­—èŠ‚ï¼‰ï¼Œåˆ†åˆ«åˆå§‹åŒ–å·¦ã€å³ç”µæœºã€‚
+                   ç„¶åè®¾ç½®è½®å¾„ã€åŠ é€Ÿåº¦å’Œé€Ÿåº¦
                 */
                 {
-                    /* 1. ·¢ËÍµç»ú³õÊ¼»¯²ÎÊı */
+                    /* 1. å‘é€ç”µæœºåˆå§‹åŒ–å‚æ•° */
                     uint8_t buf_left[8] = {0xB4, 0xBF, 0xCF, 0xAA, 0x00, 0x5F, CAR_DEV_LEFT, CAR_DEV_LEFT};
                     CAN_SendData(0x316, buf_left, 8);
                     osDelay(2);
@@ -147,50 +147,40 @@ void Car_LockTask(void const *argument)
                     CAN_SendData(0x316, buf_right, 8);
                     osDelay(2);
 
-                    /* 2. ÉèÖÃÂÖ¾¶Îª 25.75mm */
+                    /* 2. è®¾ç½®è½®å¾„ä¸º 25.75mm */
                     Car_SetWheelDiameter(CAR_DEV_LEFT, 2575);   /* 2575 = 25.75mm / 0.01mm */
                     Car_SetWheelDiameter(CAR_DEV_RIGHT, 2575);
 
-                    /* 3. ÉèÖÃ¼ÓËÙ¶ÈÎª 1000 mm/s? */
-                    Car_SetAcceleration(CAR_DEV_LEFT, 10000);   /* 10000 = 1000mm/s? / 0.1mm/s? */
-                    Car_SetAcceleration(CAR_DEV_RIGHT, 10000);
+                    /* 3. è®¾ç½®åŠ é€Ÿåº¦ä¸º 1000 mm/s? */
+	                Car_SetAcceleration(CAR_DEV_LEFT, g_acceleration);   /* 10000 = 1000mm/s? / 0.1mm/s? */
+	                Car_SetAcceleration(CAR_DEV_RIGHT, g_acceleration);
 
-                    /* 4. ÉèÖÃËÙ¶ÈÎª 1000 mm/s */
-                    Car_SetVelocity(CAR_DEV_LEFT, 10000);       /* 10000 = 1000mm/s / 0.1mm/s */
-                    Car_SetVelocity(CAR_DEV_RIGHT, 10000);
+                    /* 4. è®¾ç½®é€Ÿåº¦ä¸º 1000 mm/s */
+	                Car_SetVelocity(CAR_DEV_LEFT, g_linear_velocity);       /* 10000 = 1000mm/s / 0.1mm/s */
+	                Car_SetVelocity(CAR_DEV_RIGHT, g_linear_velocity);
 
-                    car_state = CAR_STATE_CALIBRATE_WHEEL; /* Ìø×ªµ½ÂÖ×ÓĞ£×¼×´Ì¬ */
+                    car_state = CAR_STATE_CALIBRATE_WHEEL; /* è·³è½¬åˆ°è½®å­æ ¡å‡†çŠ¶æ€ */
                 }
                 break;
 
             case CAR_STATE_CALIBRATE_WHEEL:
-                /* ×´Ì¬ËµÃ÷£º¶ÁÈ¡µç»úÎ»ÒÆ²¢ÅĞ¶Ï×óÓÒÂÖ
-                   ·¢ËÍ ID 0x408 ¶ÁÈ¡Î»ÒÆ£¬½ÓÊÕ ID 0x409 µÄ8×Ö½Ú»Ø¸´
-                   µÈ´ıÍâÁ¦ÍÆ¶¯Ğ¡³µ£¬µ±Á½¸öµç»úÎ»ÒÆ±ä»¯¶¼>100mmÊ±£º
-                   - Î»ÒÆ¼õĞ¡µÄÊÇ×óÂÖ
-                   - Î»ÒÆÔö´óµÄÊÇÓÒÂÖ
-                   Èç¹ûÅĞ¶Ï´íÎóÔò½»»»Éè±¸ºÅ
+                /* çŠ¶æ€è¯´æ˜ï¼šè¯»å–ç”µæœºä½ç§»å¹¶åˆ¤æ–­å·¦å³è½®
+                   å‘é€ ID 0x408 è¯»å–ä½ç§»ï¼Œæ¥æ”¶ ID 0x409 çš„8å­—èŠ‚å›å¤
+                   ç­‰å¾…å¤–åŠ›æ¨åŠ¨å°è½¦ï¼Œå½“å·¦ç”µæœºä½ç§»å˜åŒ– >100mm æ—¶ï¼š
+                   - ä½ç§»å‡å°çš„æ˜¯å·¦è½®
+                   - ä½ç§»å¢å¤§çš„æ˜¯å³è½®ï¼ˆè¯´æ˜ç»‘å®šé”™è¯¯ï¼Œéœ€è¦äº¤æ¢ï¼‰
+                   åªé€šè¿‡åˆ¤æ–­å·¦è½®å˜åŒ–æ¥å†³å®šæ˜¯å¦äº¤æ¢è®¾å¤‡å·
                 */
                 {
-                    static float base_pos_dev1 = 0.0f;  /* Éè±¸1»ù×¼Î»ÒÆ */
-                    static float base_pos_dev2 = 0.0f;  /* Éè±¸2»ù×¼Î»ÒÆ */
-                    static int got_dev1_base = 0;
-                    static int got_dev2_base = 0;
-                    
-                    /* Ê×´Î½øÈë£º¶ÁÈ¡Á½¸öµç»úµÄ»ù×¼Î»ÒÆ */
-                    if (!got_dev1_base || !got_dev2_base)
+                    static float base_pos_left = 0.0f;  /* å·¦ç”µæœºåŸºå‡†ä½ç§» */
+                    static int got_left_base = 0;
+
+                    /* é¦–æ¬¡è¿›å…¥ï¼šè¯»å–å·¦ç”µæœºçš„åŸºå‡†ä½ç§» */
+                    if (!got_left_base)
                     {
-                        /* ·¢ËÍ¶ÁÈ¡ÃüÁî */
-                        if (!got_dev1_base)
-                        {
-                            Car_ReadMotorPosition(CAR_DEV_LEFT);
-                        }
-                        if (!got_dev2_base)
-                        {
-                            Car_ReadMotorPosition(CAR_DEV_RIGHT);
-                        }
-                        
-                        /* µÈ´ı½ÓÊÕÎ»ÒÆÊı¾İ */
+                        Car_ReadMotorPosition(CAR_DEV_LEFT);
+
+                        /* ç­‰å¾…æ¥æ”¶åŸºå‡†ä½ç§» */
                         evt = osMessageGet(CarCanQueueHandle, 100);
                         if (evt.status == osEventMessage)
                         {
@@ -199,33 +189,19 @@ void Car_LockTask(void const *argument)
                             {
                                 uint8_t dev_id;
                                 float pos = Car_ParseMotorPosition(pMsg->data, &dev_id);
-                                
-                                if (dev_id == CAR_DEV_LEFT && !got_dev1_base)
+                                if (dev_id == CAR_DEV_LEFT)
                                 {
-                                    base_pos_dev1 = pos;
-                                    got_dev1_base = 1;
-                                }
-                                else if (dev_id == CAR_DEV_RIGHT && !got_dev2_base)
-                                {
-                                    base_pos_dev2 = pos;
-                                    got_dev2_base = 1;
+                                    base_pos_left = pos;
+                                    got_left_base = 1;
                                 }
                             }
                         }
                     }
                     else
                     {
-                        /* ÒÑ»ñÈ¡»ù×¼Î»ÒÆ£¬³ÖĞø¶ÁÈ¡µ±Ç°Î»ÒÆÅĞ¶Ï±ä»¯ */
+                        /* å·²è·å–åŸºå‡†ä½ç§»ï¼ŒæŒç»­è¯»å–å½“å‰ä½ç§»åˆ¤æ–­å˜åŒ– */
                         Car_ReadMotorPosition(CAR_DEV_LEFT);
-                        osDelay(5);
-                        Car_ReadMotorPosition(CAR_DEV_RIGHT);
-                        
-                        /* ½ÓÊÕÎ»ÒÆÊı¾İ²¢ÅĞ¶Ï */
-                        static float delta_dev1 = 0.0f;
-                        static float delta_dev2 = 0.0f;
-                        static int got_dev1_delta = 0;
-                        static int got_dev2_delta = 0;
-                        
+
                         evt = osMessageGet(CarCanQueueHandle, 100);
                         if (evt.status == osEventMessage)
                         {
@@ -234,47 +210,24 @@ void Car_LockTask(void const *argument)
                             {
                                 uint8_t dev_id;
                                 float pos = Car_ParseMotorPosition(pMsg->data, &dev_id);
-                                
+
                                 if (dev_id == CAR_DEV_LEFT)
                                 {
-                                    delta_dev1 = pos - base_pos_dev1;
-                                    got_dev1_delta = 1;
-                                }
-                                else if (dev_id == CAR_DEV_RIGHT)
-                                {
-                                    delta_dev2 = pos - base_pos_dev2;
-                                    got_dev2_delta = 1;
-                                }
-                                
-                                /* ÅĞ¶ÏÁ½¸öµç»úÎ»ÒÆ±ä»¯ÊÇ·ñ¶¼³¬¹ı100mm */
-                                if (got_dev1_delta && got_dev2_delta)
-                                {
-                                    float abs_delta1 = (delta_dev1 < 0) ? -delta_dev1 : delta_dev1;
-                                    float abs_delta2 = (delta_dev2 < 0) ? -delta_dev2 : delta_dev2;
-                                    
-                                    if (abs_delta1 > 100.0f && abs_delta2 > 100.0f)
+                                    float delta_left = pos - base_pos_left;
+                                    float abs_delta_left = (delta_left < 0) ? -delta_left : delta_left;
+
+                                    if (abs_delta_left > 100.0f)
                                     {
-                                        /* ÅĞ¶Ï×óÓÒÂÖ£ºÎ»ÒÆ¼õĞ¡µÄÊÇ×óÂÖ£¬Ôö´óµÄÊÇÓÒÂÖ */
-                                        /* CAR_DEV_LEFT µ±Ç°°ó¶¨µÄµç»úÎ»ÒÆ±ä»¯Îª delta_dev1 */
-                                        /* CAR_DEV_RIGHT µ±Ç°°ó¶¨µÄµç»úÎ»ÒÆ±ä»¯Îª delta_dev2 */
-                                        
-                                        /* Èç¹û delta_dev1 > 0£¨Ôö´ó£©¶ø delta_dev2 < 0£¨¼õĞ¡£© */
-                                        /* ËµÃ÷µ±Ç° DEV_LEFT °ó¶¨µÄÊÇÓÒÂÖ£¬ĞèÒª½»»» */
-                                        if (delta_dev1 > 0 && delta_dev2 < 0)
+                                        /* è‹¥å·¦ç”µæœºä½ç§»å¢å¤§ï¼ˆdelta>0ï¼‰ï¼Œè¯´æ˜å½“å‰ç»‘å®šçš„å·¦è®¾å¤‡å®é™…ä¸ºå³è½®ï¼Œéœ€è¦äº¤æ¢ */
+                                        if (delta_left > 0.0f)
                                         {
                                             Car_SwapDeviceID();
                                         }
-                                        
-                                        /* ÖØÖÃ¾²Ì¬±äÁ¿£¬½øÈëÏÂÒ»×´Ì¬ */
-                                        got_dev1_base = 0;
-                                        got_dev2_base = 0;
-                                        got_dev1_delta = 0;
-                                        got_dev2_delta = 0;
-                                        base_pos_dev1 = 0.0f;
-                                        base_pos_dev2 = 0.0f;
-                                        delta_dev1 = 0.0f;
-                                        delta_dev2 = 0.0f;
-                                        
+
+                                        /* é‡ç½®å¹¶è¿›å…¥ä¸‹ä¸€çŠ¶æ€ */
+                                        got_left_base = 0;
+                                        base_pos_left = 0.0f;
+
                                         car_state = CAR_STATE_ENABLE_POWER;
                                     }
                                 }
@@ -285,38 +238,42 @@ void Car_LockTask(void const *argument)
                 break;
 
             case CAR_STATE_ENABLE_POWER:
-                /* ×´Ì¬ËµÃ÷£º¶Ô×óÓÒµç»ú·¢ËÍÉÏµçÊ¹ÄÜÃüÁî£¨ID 0x413£©£¬Êı¾İÎª
-                   5A 00 00 00 DEV£¨Ê¹ÄÜ£©£¬·¢ËÍºóÔÙ·¢ËÍËø¶¨ÃüÁî£¨ID 0x60D£¬07 00£©¡£
+                /* çŠ¶æ€è¯´æ˜ï¼šå¯¹å·¦å³ç”µæœºå‘é€ä¸Šç”µä½¿èƒ½å‘½ä»¤ï¼ˆID 0x413ï¼‰ï¼Œæ•°æ®ä¸º
+                   5A 00 00 00 DEVï¼ˆä½¿èƒ½ï¼‰ï¼Œå‘é€åå†å‘é€é”å®šå‘½ä»¤ï¼ˆID 0x60Dï¼Œ07 00ï¼‰ã€‚
                 */
                 {
                     uint8_t left_dev = Car_GetLeftDevID();
                     uint8_t right_dev = Car_GetRightDevID();
                     
                     uint8_t ena_left[5] = {0x5A, 0x00, 0x00, 0x00, left_dev};
-                    CAN_SendData(0x413, ena_left, 5);
-                    osDelay(1);
+                    for (int i = 0; i < 3; i++) {
+                        CAN_SendData(0x413, ena_left, 5);
+                        osDelay(1);
+                    }
 
                     uint8_t ena_right[5] = {0x5A, 0x00, 0x00, 0x00, right_dev};
-                    CAN_SendData(0x413, ena_right, 5);
-                    osDelay(1);
+                    for (int i = 0; i < 3; i++) {
+                        CAN_SendData(0x413, ena_right, 5);
+                        osDelay(1);
+                    }
 
                     uint8_t lock[2] = {0x07, 0x00};
                     CAN_SendData(0x60D, lock, 2);
 
-                    car_state = CAR_STATE_DONE; /* Íê³Éºó×ªµ½ DONE ×´Ì¬ */
+                    car_state = CAR_STATE_DONE; /* å®Œæˆåè½¬åˆ° DONE çŠ¶æ€ */
                 }
                 break;
 
             case CAR_STATE_DONE:
-                /* ×´Ì¬ËµÃ÷£ºÍê³É°ó¶¨¡¢³õÊ¼»¯ÓëÉÏµçÊ¹ÄÜ²¢·¢ËÍËø¶¨ÃüÁîºó£¬½â¹Ò²âÊÔÈÎÎñ²¢×Ô¹ÒÆğ */
+                /* çŠ¶æ€è¯´æ˜ï¼šå®Œæˆç»‘å®šã€åˆå§‹åŒ–ä¸ä¸Šç”µä½¿èƒ½å¹¶å‘é€é”å®šå‘½ä»¤åï¼Œè§£æŒ‚æµ‹è¯•ä»»åŠ¡å¹¶è‡ªæŒ‚èµ· */
                 {
-                    /* ½â¹Ò²âÊÔÈÎÎñ */
+                    /* è§£æŒ‚æµ‹è¯•ä»»åŠ¡ */
                     if (CarTestTaskHandle != NULL)
                     {
                         vTaskResume(CarTestTaskHandle);
                     }
                     
-                    /* Ëø¶¨ÈÎÎñ×Ô¹ÒÆğ */
+                    /* é”å®šä»»åŠ¡è‡ªæŒ‚èµ· */
                     vTaskSuspend(NULL);
                 }
                 break;
@@ -328,43 +285,42 @@ void Car_LockTask(void const *argument)
         osDelay(10);
     }
 }
-
+uint16_t num_i = 0;
 /**
-  * @brief  Ğ¡³µÔËĞĞ²âÊÔÈÎÎñ£ºÇ°½ø g_test_distance -> ×ó×ª g_turn_distance Ñ­»·
-  * @param  argument Î´Ê¹ÓÃ
-  * @retval ÎŞ
-  * @note   ²»¼ì²éÔË¶¯Íê³É£¬½öÊ¹ÓÃ¹Ì¶¨ÑÓÊ± 3 Ãë
+  * @brief  å°è½¦è¿è¡Œæµ‹è¯•ä»»åŠ¡ï¼šå‰è¿› -> åé€€ å¾€å¤
+  * @param  argument æœªä½¿ç”¨
+  * @retval æ— 
+  * @note   ä½¿ç”¨å…¨å±€å˜é‡ g_test_distanceï¼Œå›ºå®šç­‰å¾… 3 ç§’
   */
 void Car_TestTask(void const *argument)
 {
     (void)argument;
 
-    /* ÈÎÎñÆô¶¯Ê±Á¢¼´¹ÒÆğ£¬µÈ´ıËø¶¨ÈÎÎñ½â¹Ò */
+    /* ä»»åŠ¡å¯åŠ¨æ—¶ç«‹å³æŒ‚èµ·ï¼Œç­‰å¾…é”å®šä»»åŠ¡è§£æŒ‚ */
     vTaskSuspend(NULL);
 
-    for (;;)
+    for (;num_i<10;num_i++)
     {
-        /* Ç°½ø g_test_distance */
+        /* å‰è¿› g_test_distance */
         Car_MoveForward(g_test_distance);
-        osDelay(10000); /* ¹Ì¶¨µÈ´ı 3 Ãë */
+        osDelay(12000); /* å›ºå®šç­‰å¾… 3 ç§’ */
 
-        /* ×ó×ª£ºÊ¹ÓÃ½Ç¶ÈÅĞ¶Ï£¬Ã¿10ms¼ì²éÒ»´Î */
+        /* å³è½¬ï¼šä½¿ç”¨è§’åº¦åˆ¤æ–­ï¼Œæ¯10msæ£€æŸ¥ä¸€æ¬¡ */
         {
             float prev_angle = TIM_GetAngle();
             float accumulated_angle = 0.0f;
 
-            /* ·¢ËÍ×ó×ªÃüÁî£¨¿ªÊ¼Ğı×ª£© */
+            /* å‘é€å³è½¬å‘½ä»¤ï¼ˆå¼€å§‹æ—‹è½¬ï¼‰ */
             Car_TurnLeft(g_turn_distance);
 
-            /* Ã¿10ms¼ì²éÒ»´Î½Ç¶È±ä»¯²¢ÀÛ¼Ó£¬Ö±µ½´ïµ½Ä¿±ê½Ç¶È */
+            /* æ¯10msæ£€æŸ¥ä¸€æ¬¡è§’åº¦å˜åŒ–å¹¶ç´¯åŠ ç»å¯¹å€¼ï¼Œç›´åˆ°è¾¾åˆ°ç›®æ ‡è§’åº¦ */
             while (1)
             {
-                osDelay(10);
+                osDelay(5);
 
                 float current_angle = TIM_GetAngle();
                 float delta = current_angle - prev_angle;
 
-                /* ´¦Àí¿çÔ½ ¡À180¡ã ±ß½ç */
                 if (delta > 180.0f) {
                     delta -= 360.0f;
                 } else if (delta < -180.0f) {
@@ -382,7 +338,7 @@ void Car_TestTask(void const *argument)
             }
         }
 
-        /* Ğ¡¼ä¸ô£¬È·±£½Ç¶ÈÎÈ¶¨ */
+        /* å°é—´éš”ï¼Œç¡®ä¿è§’åº¦ç¨³å®š */
         osDelay(500);
     }
 }

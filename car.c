@@ -5,7 +5,7 @@
 
 /* 该文件作为小车底层驱动接口，任务实现已移至 NewGyroscope.c，后续在此添加硬件相关实现 */
 
-/* 外部全局变量声明（定义在 car_task.c） */
+
 extern float g_linear_velocity;     /* 直线运动速度 (mm/s) */
 extern float g_rotation_velocity;   /* 旋转速度 (mm/s) */
 extern float g_acceleration;        /* 加速度 (mm/s²) */
@@ -37,7 +37,12 @@ static void send_bind_sn(const uint8_t *sn, uint8_t dev)
 static void send_init_motor(uint8_t dev)
 {
     uint8_t buf[8] = {0xB4, 0xBF, 0xCF, 0xAA, 0x00, 0x5F, dev, dev};
-    CAN_SendData(0x316, buf, 8);
+
+    /* 连续发送3遍，增加短延时以保证总线稳定 */
+    for (int i = 0; i < 3; i++) {
+        CAN_SendData(0x316, buf, 8);
+        osDelay(1);
+    }
 }
 
 /* 电源使能：发送 ID 0x413，数据: 5A/4A + 00 00 00 + DEV（5 字节） */
@@ -49,7 +54,12 @@ static void send_enable_motor(uint8_t enable, uint8_t dev)
     buf[2] = 0x00;
     buf[3] = 0x00;
     buf[4] = dev;
-    CAN_SendData(0x413, buf, 5);
+
+    /* 连续发送3遍，增加短延时以保证总线稳定 */
+    for (int i = 0; i < 3; i++) {
+        CAN_SendData(0x413, buf, 5);
+        osDelay(1);
+    }
 }
 
 /**
@@ -152,16 +162,15 @@ static void Car_SendDisplacement(uint8_t dev_id, float displacement)
   */
 void Car_MoveForward(float distance)
 {
-    /* 使用全局变量设置速度 */
-    uint32_t velocity = (uint32_t)(g_linear_velocity * 10.0f);  /* 转换为 0.1mm/s */
+    /* 每次调用设置直线速度（使用全局变量，单位转换到 0.1mm/s） */
+    uint32_t velocity = (uint32_t)(g_linear_velocity * 10.0f);
     Car_SetVelocity(current_left_dev, velocity);
     Car_SetVelocity(current_right_dev, velocity);
-    
-    /* 左轮负数位移、右轮正数位移，连续发送3遍（每次发送左右各一次） */
-    for (int i = 0; i < 3; i++)
-    {
+
+    /* 发送左、右位移命令各两遍，保留 1ms 延时 */
+    for (int i = 0; i < 2; i++) {
         Car_SendDisplacement(current_left_dev, -distance);
-        osDelay(1);
+        //osDelay(1);
         Car_SendDisplacement(current_right_dev, distance);
         osDelay(1);
     }
@@ -175,14 +184,13 @@ void Car_MoveForward(float distance)
   */
 void Car_MoveBackward(float distance)
 {
-    /* 使用全局变量设置速度 */
-    uint32_t velocity = (uint32_t)(g_linear_velocity * 10.0f);  /* 转换为 0.1mm/s */
+    /* 每次调用设置直线速度（使用全局变量，单位转换到 0.1mm/s） */
+    uint32_t velocity = (uint32_t)(g_linear_velocity * 10.0f);
     Car_SetVelocity(current_left_dev, velocity);
     Car_SetVelocity(current_right_dev, velocity);
-    
-    /* 左轮正数位移、右轮负数位移，连续发送3遍（每次发送左右各一次） */
-    for (int i = 0; i < 3; i++)
-    {
+
+    /* 发送左、右位移命令各两遍，保留 1ms 延时 */
+    for (int i = 0; i < 2; i++) {
         Car_SendDisplacement(current_left_dev, distance);
         osDelay(1);
         Car_SendDisplacement(current_right_dev, -distance);
@@ -198,16 +206,15 @@ void Car_MoveBackward(float distance)
   */
 void Car_TurnLeft(float distance)
 {
-    /* 使用全局变量设置旋转速度 */
-    uint32_t velocity = (uint32_t)(g_rotation_velocity * 10.0f);  /* 转换为 0.1mm/s */
+    /* 每次调用设置旋转速度（使用全局变量，单位转换到 0.1mm/s） */
+    uint32_t velocity = (uint32_t)(g_rotation_velocity * 10.0f);
     Car_SetVelocity(current_left_dev, velocity);
     Car_SetVelocity(current_right_dev, velocity);
-    
-    /* 两个都是负数位移，连续发送3遍（每次发送左右各一次） */
-    for (int i = 0; i < 3; i++)
-    {
+
+    /* 发送左右位移命令各两遍以触发旋转，保留 1ms 延时 */
+    for (int i = 0; i < 2; i++) {
         Car_SendDisplacement(current_left_dev, -distance);
-        osDelay(1);
+        //osDelay(1);
         Car_SendDisplacement(current_right_dev, -distance);
         osDelay(1);
     }
@@ -221,16 +228,15 @@ void Car_TurnLeft(float distance)
   */
 void Car_TurnRight(float distance)
 {
-    /* 使用全局变量设置旋转速度 */
-    uint32_t velocity = (uint32_t)(g_rotation_velocity * 10.0f);  /* 转换为 0.1mm/s */
+    /* 每次调用设置旋转速度（使用全局变量，单位转换到 0.1mm/s） */
+    uint32_t velocity = (uint32_t)(g_rotation_velocity * 10.0f);
     Car_SetVelocity(current_left_dev, velocity);
     Car_SetVelocity(current_right_dev, velocity);
-    
-    /* 两个都是正数位移，连续发送3遍（每次发送左右各一次） */
-    for (int i = 0; i < 3; i++)
-    {
+
+    /* 发送左右位移命令各两遍以触发旋转，保留 1ms 延时 */
+    for (int i = 0; i < 2; i++) {
         Car_SendDisplacement(current_left_dev, distance);
-        osDelay(1);
+        //osDelay(1);
         Car_SendDisplacement(current_right_dev, distance);
         osDelay(1);
     }
@@ -240,17 +246,14 @@ void Car_TurnRight(float distance)
   * @brief  小车停止
   * @param  无
   * @retval 无
-  * @note   停止：发送位移为 0
+  * @note   停止：发送位移为 0.1mm
   */
 void Car_Stop(void)
 {
-    /* 发送位移为 0，连续发送3遍（每次发送左右各一次） */
-    for (int i = 0; i < 3; i++)
-    {
-        /* 左轮 */
+    /* 改为通过发送位移 0.1mm 来停止电机，发送两遍并保留短延时以提高可靠性 */
+    for (int i = 0; i < 2; i++) {
         Car_SendDisplacement(current_left_dev, 0.1f);
-        osDelay(1);
-        /* 右轮 */
+        //osDelay(1);
         Car_SendDisplacement(current_right_dev, 0.1f);
         osDelay(1);
     }
@@ -274,7 +277,7 @@ void Car_SetWheelDiameter(uint8_t dev_id, uint16_t diameter)
     for (int i = 0; i < 3; i++)
     {
         CAN_SendData(0x408, cmd, 4);
-        osDelay(2);
+        osDelay(1);
     }
 }
 
@@ -294,10 +297,10 @@ void Car_SetAcceleration(uint8_t dev_id, uint32_t acceleration)
     cmd[4] = dev_id;
     
     /* 连续发送3遍 */
-    for (int i = 0; i < 3; i++)
+    for (int i = 0; i < 2; i++)
     {
         CAN_SendData(0x414, cmd, 5);
-        osDelay(2);
+        osDelay(1);
     }
 }
 
@@ -317,10 +320,10 @@ void Car_SetVelocity(uint8_t dev_id, uint32_t velocity)
     cmd[4] = dev_id;
     
     /* 连续发送3遍 */
-    for (int i = 0; i < 3; i++)
+    for (int i = 0; i < 2; i++)
     {
         CAN_SendData(0x415, cmd, 5);
-        osDelay(2);
+        osDelay(1);
     }
 }
 
