@@ -41,7 +41,7 @@ typedef enum {
 /* 运动参数全局变量（可在GDB调试时修改） */
 float g_linear_velocity = 1000.0f;      /* 直线运动速度 (mm/s) */
 float g_rotation_velocity = 600.0f;     /* 旋转速度 (mm/s) */
-float g_acceleration = 2000.0f;         /* 加速度 (mm/s?) */
+float g_acceleration = 1000.0f;         /* 加速度 (mm/s?) */
 float g_test_distance = 5000.0f;         /* 测试距离 (mm) */
 float g_turn_distance = 620.0f;        /* 旋转位移 (mm) */
 float g_target_angle = 180.0f;          /* 目标旋转角度 (度) */
@@ -151,13 +151,13 @@ void Car_LockTask(void const *argument)
                     Car_SetWheelDiameter(CAR_DEV_LEFT, 2575);   /* 2575 = 25.75mm / 0.01mm */
                     Car_SetWheelDiameter(CAR_DEV_RIGHT, 2575);
 
-                    /* 3. 设置加速度为 1000 mm/s? */
-	                Car_SetAcceleration(CAR_DEV_LEFT, g_acceleration);   /* 10000 = 1000mm/s? / 0.1mm/s? */
-	                Car_SetAcceleration(CAR_DEV_RIGHT, g_acceleration);
+                    /* 3. 设置加速度为 g_acceleration（以 0.1 单位发送） */
+                    Car_SetAcceleration(CAR_DEV_LEFT, (uint32_t)(g_acceleration * 10.0f));
+                    Car_SetAcceleration(CAR_DEV_RIGHT, (uint32_t)(g_acceleration * 10.0f));
 
-                    /* 4. 设置速度为 1000 mm/s */
-	                Car_SetVelocity(CAR_DEV_LEFT, g_linear_velocity);       /* 10000 = 1000mm/s / 0.1mm/s */
-	                Car_SetVelocity(CAR_DEV_RIGHT, g_linear_velocity);
+                    /* 4. 设置速度为 g_linear_velocity（以 0.1mm/s 单位发送） */
+                    Car_SetVelocity(CAR_DEV_LEFT, (uint32_t)(g_linear_velocity * 10.0f));
+                    Car_SetVelocity(CAR_DEV_RIGHT, (uint32_t)(g_linear_velocity * 10.0f));
 
                     car_state = CAR_STATE_CALIBRATE_WHEEL; /* 跳转到轮子校准状态 */
                 }
@@ -316,7 +316,7 @@ void Car_TestTask(void const *argument)
             /* 每10ms检查一次角度变化并累加绝对值，直到达到目标角度 */
             while (1)
             {
-                osDelay(5);
+                osDelay(2);
 
                 float current_angle = TIM_GetAngle();
                 float delta = current_angle - prev_angle;
@@ -342,3 +342,4 @@ void Car_TestTask(void const *argument)
         osDelay(500);
     }
 }
+
