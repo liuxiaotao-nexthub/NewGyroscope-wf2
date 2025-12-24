@@ -12,6 +12,7 @@
 #include "car.h"
 #include "can.h"
 #include "tim.h"
+#include "PID.h"
 #include <../CMSIS_RTOS/cmsis_os.h>
 #include <string.h>
 #include <math.h>
@@ -41,10 +42,13 @@ typedef enum {
 /* 运动参数全局变量（可在GDB调试时修改） */
 float g_linear_velocity = 1500.0f;      /* 直线运动速度 (mm/s) */
 float g_rotation_velocity = 600.0f;     /* 旋转速度 (mm/s) */
-float g_acceleration = 2000.0f;         /* 加速度 (mm/s?) */
-float g_test_distance = 5000.0f;         /* 测试距离 (mm) */
-float g_turn_distance = 620.0f;        /* 旋转位移 (mm) */
+float g_acceleration = 2000.0f;         /* 加速度 (mm/s²) */
+float g_test_distance = 1000.0f;         /* 测试距离 (mm) */
+float g_turn_distance = 620.0f;         /* 旋转位移 (mm) - 两轮各600mm刚好180° */
 float g_target_angle = 180.0f;          /* 目标旋转角度 (度) */
+
+/* 测试循环计数器 */
+uint16_t num_i = 0;
 
 /* Private function prototypes -----------------------------------------------*/
 /* Private functions ---------------------------------------------------------*/
@@ -275,6 +279,7 @@ void Car_LockTask(void const *argument)
             case CAR_STATE_DONE:
                 /* 状态说明：完成绑定、初始化与上电使能并发送锁定命令后，解挂测试任务并自挂起 */
                 {
+	                osDelay(3000);
                     /* 解挂测试任务 */
                     if (CarTestTaskHandle != NULL)
                     {
@@ -293,12 +298,12 @@ void Car_LockTask(void const *argument)
         osDelay(10);
     }
 }
-uint16_t num_i = 0;
+
 /**
   * @brief  小车运行测试任务：前进 -> 后退 往复
   * @param  argument 未使用
   * @retval 无
-  * @note   使用全局变量 g_test_distance，固定等待 3 秒
+  * @note   使用全局变量 g_test_distance，使用角度PID控制保持直线
   */
 void Car_TestTask(void const *argument)
 {
@@ -309,125 +314,60 @@ void Car_TestTask(void const *argument)
 
     for (;num_i<10;num_i++)
     {
-        /* 前进 g_test_distance - 增加实时位移补偿（仅补偿右轮） */
+        /* 前进 g_test_distance - 使用角度PID控制保持直线 */
         {
-            osEvent evt_local;
             uint8_t left_dev = Car_GetLeftDevID();
             uint8_t right_dev = Car_GetRightDevID();
             
-            /* 1. 读取初始基准位移 */
-            float base_pos_left = 0.0f, base_pos_right = 0.0f;
-            int got_left = 0, got_right = 0;
+            /* 1. 读取初始基准角度 */
+            float base_angle = TIM_GetAngle();
             
-            uint32_t wait_ms = 0;
-            while ((!got_left || !got_right) && wait_ms < 1000) {
-                /* 每次循环都重新发送读取命令 */
-                if (!got_left) {
-                    Car_ReadMotorPosition(left_dev);
-                }
-                osDelay(1);
-                if (!got_right) {
-                    Car_ReadMotorPosition(right_dev);
-                }
-                
-                evt_local = osMessageGet(CarCanQueueHandle, 100);
-                if (evt_local.status == osEventMessage) {
-                    CarCanMsg_t *pMsg = (CarCanMsg_t *)evt_local.value.p;
-                    if (pMsg->id == 0x409 && pMsg->len >= 6) {
-                        uint8_t dev_id;
-                        float pos = Car_ParseMotorPosition(pMsg->data, &dev_id);
-                        if (dev_id == left_dev && !got_left) {
-                            base_pos_left = pos;
-                            got_left = 1;
-                        } else if (dev_id == right_dev && !got_right) {
-                            base_pos_right = pos;
-                            got_right = 1;
-                        }
-                    }
-                }
-                wait_ms += 100;
-            }
+            /* 2. 初始化PID控制器 */
+            PID_State_t pid_state;
+            PID_Reset(&pid_state);
             
-            /* 2. 发送前进命令 */
+            /* 3. 发送前进命令 */
             Car_MoveForward(g_test_distance);
             
-            /* 3. 循环读取位移并补偿右轮,每10ms一次 */
+            /* 4. 循环读取角度并PID校正，每10ms一次 */
             uint32_t elapsed = 0;
-            const uint32_t max_time = 4000; /* 最多等待12秒 */
+            const uint32_t max_time = 4000;  /* 最多等待4秒 */
+            const float dt = 0.01f;  /* 10ms = 0.01秒 */
             
             while (elapsed < max_time) {
                 osDelay(10);
                 elapsed += 10;
                 
-                /* 读取当前位移 - 分别读取左右轮 */
-                float left_pos = 0.0f, right_pos = 0.0f;
-                int read_left = 0, read_right = 0;
+                /* 读取当前角度 */
+                float current_angle = TIM_GetAngle();
                 
-                /* 读取左轮位移 */
-                for (int attempt = 0; attempt < 5; attempt++) {
-                    Car_ReadMotorPosition(left_dev);
-                    osDelay(1);
-                    
-                    evt_local = osMessageGet(CarCanQueueHandle, 50);
-                    if (evt_local.status == osEventMessage) {
-                        CarCanMsg_t *pMsg = (CarCanMsg_t *)evt_local.value.p;
-                        if (pMsg->id == 0x409 && pMsg->len >= 6) {
-                            uint8_t dev_id;
-                            float pos = Car_ParseMotorPosition(pMsg->data, &dev_id);
-                            if (dev_id == left_dev) {
-                                left_pos = pos;
-                                read_left = 1;
-                                break;  /* 读到左轮数据立即退出 */
-                            }
-                        }
-                    }
+                /* 计算角度误差（期望角度 - 实际角度） */
+                /* 目标是保持基准角度不变 */
+                float angle_error = base_angle - current_angle;
+                
+                /* 处理角度跨越±180度的情况 */
+                if (angle_error > 180.0f) {
+                    angle_error -= 360.0f;
+                } else if (angle_error < -180.0f) {
+                    angle_error += 360.0f;
                 }
                 
-                /* 读取右轮位移 */
-                for (int attempt = 0; attempt < 5; attempt++) {
-                    Car_ReadMotorPosition(right_dev);
-                    osDelay(1);
-                    
-                    evt_local = osMessageGet(CarCanQueueHandle, 50);
-                    if (evt_local.status == osEventMessage) {
-                        CarCanMsg_t *pMsg = (CarCanMsg_t *)evt_local.value.p;
-                        if (pMsg->id == 0x409 && pMsg->len >= 6) {
-                            uint8_t dev_id;
-                            float pos = Car_ParseMotorPosition(pMsg->data, &dev_id);
-                            if (dev_id == right_dev) {
-                                right_pos = pos;
-                                read_right = 1;
-                                break;  /* 读到右轮数据立即退出 */
-                            }
-                        }
-                    }
-                }
+                /* PID计算补偿量 */
+                float compensation = PID_Calculate(&pid_state, angle_error, dt);
                 
-                if (read_left && read_right) {
-                    /* 计算两轮相对基准的实际位移（前进时左轮负转,右轮正转） */
-                    float left_traveled = fabsf(left_pos - base_pos_left);  /* 左轮取绝对值 */
-                    float right_traveled = right_pos - base_pos_right;       /* 右轮保留符号(应为正) */
-                    
-                    /* 计算差距: 右轮与左轮对比 */
-                    float diff = right_traveled - left_traveled;
-                    
-                    /* 只补偿右轮 */
-                    if (fabsf(diff) > 2.0f) {
-                        if (diff < 0) {
-                            /* 右轮慢了(右轮位移 < 左轮位移),补偿正位移让右轮追赶 */
-                            Car_SetSlaveDisplacement(right_dev, -diff);
-                        } else {
-                            /* 右轮快了(右轮位移 > 左轮位移),补偿负位移让右轮减速 */
-                            Car_SetSlaveDisplacement(right_dev, -diff);
-                        }
-                    }
-                    
-                    /* 判断是否完成(左轮达到目标) */
-                    if (left_traveled >= g_test_distance) {
-                        break;
-                    }
+                /* 只补偿右轮以保持直线 */
+                /* angle_error > 0: 顺时针偏转（右轮快了） → 右轮负补偿（减速） */
+                /* angle_error < 0: 逆时针偏转（右轮慢了） → 右轮正补偿（加速） */
+                if (fabsf(compensation) > 0.5f) {  /* 补偿阈值0.5mm */
+                    /* 直接用 -compensation 补偿右轮：
+                       angle_error > 0 → compensation > 0 → 右轮得到负补偿
+                       angle_error < 0 → compensation < 0 → 右轮得到正补偿 */
+                    Car_SetSlaveDisplacement(right_dev, -compensation);
                 }
             }
+            
+            /* 前进完成，等待稳定 */
+            osDelay(100);
         }
 
         /* 右转:使用角度判断,每2ms检查一次 */

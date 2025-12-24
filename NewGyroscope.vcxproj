@@ -53,6 +53,7 @@
     <ClCompile Include="car.c" />
     <ClCompile Include="car_task.c" />
     <ClCompile Include="NewGyroscope.c" />
+    <ClCompile Include="PID.c" />
     <ClCompile Include="spi.c" />
     <ClCompile Include="system_stm32f1xx.c" />
     <ClCompile Include="tim.c" />
@@ -60,6 +61,7 @@
     <ClInclude Include="can_task.h" />
     <ClInclude Include="car.h" />
     <ClInclude Include="car_task.h" />
+    <ClInclude Include="PID.h" />
     <ClInclude Include="tim.h" />
     <ClInclude Include="xv7001bb.h" />
     <None Include="stm32.props" />

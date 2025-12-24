@@ -639,6 +639,9 @@
     <ClCompile Include="car_task.c">
       <Filter>Source files</Filter>
     </ClCompile>
+    <ClCompile Include="PID.c">
+      <Filter>Source files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="xv7001bb.h">
@@ -660,6 +663,9 @@
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="car_task.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="PID.h">
       <Filter>Header files</Filter>
     </ClInclude>
   </ItemGroup>

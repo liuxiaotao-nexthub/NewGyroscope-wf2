@@ -253,7 +253,7 @@ void Car_Stop(void)
     /* 改为通过发送位移 0.1mm 来停止电机，发送两遍并保留短延时以提高可靠性 */
     for (int i = 0; i < 2; i++) {
         Car_SendDisplacement(current_left_dev, 0.1f);
-        //osDelay(1);
+        osDelay(1);
         Car_SendDisplacement(current_right_dev, 0.1f);
         osDelay(1);
     }
