@@ -90,7 +90,7 @@ void CAN_ControlTask(void const *argument)
             CAN_RxFlag = 0;
 
             /* 处理 0x312（SN 上报）和 0x409（电机位移）消息 */
-            if ((id == 0x312 && len == 7) || (id == 0x409 && len == 8))
+            if ((id == 0x312 && len == 7) || (id == 0x409))
             {
                 /* 将消息放入队列，供 Car_LockTask 处理 */
                 carMsg.id = id;
@@ -100,6 +100,6 @@ void CAN_ControlTask(void const *argument)
             }
         }
 
-        osDelay(10);
+        osDelay(5);
     }
 }

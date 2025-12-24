@@ -180,7 +180,7 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 	{
 		CAN_RxDataLen = RxHeader.DLC;
 		CAN_RxStdId = RxHeader.StdId;
-		CAN_RxFlag = 1;  /* 设置接收标志位 */
+		CAN_RxFlag = 1;
 	}
 }
 

@@ -39,7 +39,7 @@ typedef enum {
 
 /* Private variables ---------------------------------------------------------*/
 /* 运动参数全局变量（可在GDB调试时修改） */
-float g_linear_velocity = 1000.0f;      /* 直线运动速度 (mm/s) */
+float g_linear_velocity = 1500.0f;      /* 直线运动速度 (mm/s) */
 float g_rotation_velocity = 600.0f;     /* 旋转速度 (mm/s) */
 float g_acceleration = 1000.0f;         /* 加速度 (mm/s?) */
 float g_test_distance = 5000.0f;         /* 测试距离 (mm) */
@@ -193,7 +193,7 @@ void Car_LockTask(void const *argument)
                         if (evt.status == osEventMessage)
                         {
                             CarCanMsg_t *pMsg = (CarCanMsg_t *)evt.value.p;
-                            if (pMsg->id == 0x409 && pMsg->len == 8)
+                            if (pMsg->id == 0x409)
                             {
                                 uint8_t dev_id;
                                 float pos = Car_ParseMotorPosition(pMsg->data, &dev_id);
@@ -214,7 +214,7 @@ void Car_LockTask(void const *argument)
                         if (evt.status == osEventMessage)
                         {
                             CarCanMsg_t *pMsg = (CarCanMsg_t *)evt.value.p;
-                            if (pMsg->id == 0x409 && pMsg->len == 8)
+                            if (pMsg->id == 0x409 && pMsg->len >= 6)
                             {
                                 uint8_t dev_id;
                                 float pos = Car_ParseMotorPosition(pMsg->data, &dev_id);
@@ -309,19 +309,136 @@ void Car_TestTask(void const *argument)
 
     for (;num_i<10;num_i++)
     {
-        /* 前进 g_test_distance */
-        Car_MoveForward(g_test_distance);
-        osDelay(12000); /* 固定等待 12 秒 */
+        /* 前进 g_test_distance - 增加实时位移补偿（仅补偿右轮） */
+        {
+            osEvent evt_local;
+            uint8_t left_dev = Car_GetLeftDevID();
+            uint8_t right_dev = Car_GetRightDevID();
+            
+            /* 1. 读取初始基准位移 */
+            float base_pos_left = 0.0f, base_pos_right = 0.0f;
+            int got_left = 0, got_right = 0;
+            
+            uint32_t wait_ms = 0;
+            while ((!got_left || !got_right) && wait_ms < 1000) {
+                /* 每次循环都重新发送读取命令 */
+                if (!got_left) {
+                    Car_ReadMotorPosition(left_dev);
+                }
+                osDelay(1);
+                if (!got_right) {
+                    Car_ReadMotorPosition(right_dev);
+                }
+                
+                evt_local = osMessageGet(CarCanQueueHandle, 100);
+                if (evt_local.status == osEventMessage) {
+                    CarCanMsg_t *pMsg = (CarCanMsg_t *)evt_local.value.p;
+                    if (pMsg->id == 0x409 && pMsg->len >= 6) {
+                        uint8_t dev_id;
+                        float pos = Car_ParseMotorPosition(pMsg->data, &dev_id);
+                        if (dev_id == left_dev && !got_left) {
+                            base_pos_left = pos;
+                            got_left = 1;
+                        } else if (dev_id == right_dev && !got_right) {
+                            base_pos_right = pos;
+                            got_right = 1;
+                        }
+                    }
+                }
+                wait_ms += 100;
+            }
+            
+            /* 2. 发送前进命令 */
+            Car_MoveForward(g_test_distance);
+            
+            /* 3. 循环读取位移并补偿右轮,每10ms一次 */
+            uint32_t elapsed = 0;
+            const uint32_t max_time = 5100; /* 最多等待12秒 */
+            
+            while (elapsed < max_time) {
+                osDelay(10);
+                elapsed += 10;
+                
+                /* 读取当前位移 - 分别读取左右轮 */
+                float left_pos = 0.0f, right_pos = 0.0f;
+                int read_left = 0, read_right = 0;
+                
+                /* 读取左轮位移 */
+                for (int attempt = 0; attempt < 5; attempt++) {
+                    Car_ReadMotorPosition(left_dev);
+                    osDelay(2);
+                    
+                    evt_local = osMessageGet(CarCanQueueHandle, 50);
+                    if (evt_local.status == osEventMessage) {
+                        CarCanMsg_t *pMsg = (CarCanMsg_t *)evt_local.value.p;
+                        if (pMsg->id == 0x409 && pMsg->len >= 6) {
+                            uint8_t dev_id;
+                            float pos = Car_ParseMotorPosition(pMsg->data, &dev_id);
+                            if (dev_id == left_dev) {
+                                left_pos = pos;
+                                read_left = 1;
+                                break;  /* 读到左轮数据立即退出 */
+                            }
+                        }
+                    }
+                }
+                
+                /* 读取右轮位移 */
+                for (int attempt = 0; attempt < 5; attempt++) {
+                    Car_ReadMotorPosition(right_dev);
+                    osDelay(2);
+                    
+                    evt_local = osMessageGet(CarCanQueueHandle, 50);
+                    if (evt_local.status == osEventMessage) {
+                        CarCanMsg_t *pMsg = (CarCanMsg_t *)evt_local.value.p;
+                        if (pMsg->id == 0x409 && pMsg->len >= 6) {
+                            uint8_t dev_id;
+                            float pos = Car_ParseMotorPosition(pMsg->data, &dev_id);
+                            if (dev_id == right_dev) {
+                                right_pos = pos;
+                                read_right = 1;
+                                break;  /* 读到右轮数据立即退出 */
+                            }
+                        }
+                    }
+                }
+                
+                if (read_left && read_right) {
+                    /* 计算两轮相对基准的实际位移（前进时左轮负转,右轮正转） */
+                    float left_traveled = fabsf(left_pos - base_pos_left);  /* 左轮取绝对值 */
+                    float right_traveled = right_pos - base_pos_right;       /* 右轮保留符号(应为正) */
+                    
+                    /* 计算差距: 右轮与左轮对比 */
+                    float diff = right_traveled - left_traveled;
+                    
+                    /* 只补偿右轮 */
+                    if (fabsf(diff) > 2.0f) {
+                        if (diff < 0) {
+                            /* 右轮慢了(右轮位移 < 左轮位移),补偿正位移让右轮追赶 */
+                            Car_SetSlaveDisplacement(right_dev, -diff);
+                        } else {
+                            /* 右轮快了(右轮位移 > 左轮位移),补偿负位移让右轮减速 */
+                            Car_SetSlaveDisplacement(right_dev, -diff);
+                        }
+                    }
+                    
+                    /* 判断是否完成(左轮达到目标) */
+                    if (left_traveled >= g_test_distance) {
+                        break;
+                    }
+                }
+            }
+        }
 
-        /* 右转：使用角度判断，每10ms检查一次 */
+        /* 右转:使用角度判断,每2ms检查一次 */
         {
             float prev_angle = TIM_GetAngle();
             float accumulated_angle = 0.0f;
 
-            /* 发送右转命令（开始旋转） */
+            /* 发送右转命令(开始旋转) */
             Car_TurnLeft(g_turn_distance);
 
-            /* 每10ms检查一次角度变化并累加绝对值，直到达到目标角度 */
+            /* 每2ms检查一次角度变化并累加绝对值,直到达到目标角度 */
             while (1)
             {
                 osDelay(2);
@@ -346,7 +463,7 @@ void Car_TestTask(void const *argument)
             }
         }
 
-        /* 小间隔，确保角度稳定 */
+        /* 小间隔,确保角度稳定 */
         osDelay(500);
     }
 }
