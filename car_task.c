@@ -41,7 +41,7 @@ typedef enum {
 /* 运动参数全局变量（可在GDB调试时修改） */
 float g_linear_velocity = 1500.0f;      /* 直线运动速度 (mm/s) */
 float g_rotation_velocity = 600.0f;     /* 旋转速度 (mm/s) */
-float g_acceleration = 1000.0f;         /* 加速度 (mm/s?) */
+float g_acceleration = 2000.0f;         /* 加速度 (mm/s?) */
 float g_test_distance = 5000.0f;         /* 测试距离 (mm) */
 float g_turn_distance = 620.0f;        /* 旋转位移 (mm) */
 float g_target_angle = 180.0f;          /* 目标旋转角度 (度) */
@@ -353,7 +353,7 @@ void Car_TestTask(void const *argument)
             
             /* 3. 循环读取位移并补偿右轮,每10ms一次 */
             uint32_t elapsed = 0;
-            const uint32_t max_time = 5100; /* 最多等待12秒 */
+            const uint32_t max_time = 4000; /* 最多等待12秒 */
             
             while (elapsed < max_time) {
                 osDelay(10);
@@ -366,7 +366,7 @@ void Car_TestTask(void const *argument)
                 /* 读取左轮位移 */
                 for (int attempt = 0; attempt < 5; attempt++) {
                     Car_ReadMotorPosition(left_dev);
-                    osDelay(2);
+                    osDelay(1);
                     
                     evt_local = osMessageGet(CarCanQueueHandle, 50);
                     if (evt_local.status == osEventMessage) {
@@ -386,7 +386,7 @@ void Car_TestTask(void const *argument)
                 /* 读取右轮位移 */
                 for (int attempt = 0; attempt < 5; attempt++) {
                     Car_ReadMotorPosition(right_dev);
-                    osDelay(2);
+                    osDelay(1);
                     
                     evt_local = osMessageGet(CarCanQueueHandle, 50);
                     if (evt_local.status == osEventMessage) {
