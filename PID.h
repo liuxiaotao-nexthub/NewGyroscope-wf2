@@ -33,6 +33,9 @@ extern float g_pid_kp;      /* 比例系数 */
 extern float g_pid_ki;      /* 积分系数 */
 extern float g_pid_kd;      /* 微分系数 */
 
+/* PID输出（用于调试、可在GDB中查看） */
+extern float g_pid_output;
+
 /* Exported functions --------------------------------------------------------*/
 /**
   * @brief  PID控制器计算

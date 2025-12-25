@@ -12,6 +12,7 @@
 #include "car.h"
 #include "can.h"
 #include "tim.h"
+#include "PID.h"
 #include <../CMSIS_RTOS/cmsis_os.h>
 #include <string.h>
 #include <math.h>
@@ -41,10 +42,16 @@ typedef enum {
 /* 运动参数全局变量（可在GDB调试时修改） */
 float g_linear_velocity = 1500.0f;      /* 直线运动速度 (mm/s) */
 float g_rotation_velocity = 600.0f;     /* 旋转速度 (mm/s) */
-float g_acceleration = 1000.0f;         /* 加速度 (mm/s?) */
-float g_test_distance = 5000.0f;         /* 测试距离 (mm) */
-float g_turn_distance = 610.0f;        /* 旋转位移 (mm) */
+float g_acceleration = 2000.0f;         /* 加速度 (mm/s²) */
+float g_test_distance = 2000.0f;         /* 测试距离 (mm) */
+float g_turn_distance = 620.0f;         /* 旋转位移 (mm) - 两轮各600mm刚好180° */
 float g_target_angle = 180.0f;          /* 目标旋转角度 (度) */
+
+/* 全局角度误差，便于调试/查看 */
+float g_angle_error = 0.0f;
+
+/* 测试循环计数器 */
+uint16_t num_i = 0;
 
 /* Private function prototypes -----------------------------------------------*/
 /* Private functions ---------------------------------------------------------*/
@@ -159,6 +166,14 @@ void Car_LockTask(void const *argument)
                     Car_SetVelocity(CAR_DEV_LEFT, (uint32_t)(g_linear_velocity * 10.0f));
                     Car_SetVelocity(CAR_DEV_RIGHT, (uint32_t)(g_linear_velocity * 10.0f));
 
+                    /* 5. 设置从加速度为 g_acceleration（以 0.1 单位发送） */
+                    Car_SetSlaveAcceleration(CAR_DEV_LEFT, (uint32_t)(g_acceleration * 20.0f));
+                    Car_SetSlaveAcceleration(CAR_DEV_RIGHT, (uint32_t)(g_acceleration * 20.0f));
+
+                    /* 6. 设置从速度为 g_linear_velocity（以 0.1mm/s 单位发送） */
+                    Car_SetSlaveVelocity(CAR_DEV_LEFT, (uint32_t)(g_linear_velocity * 20.0f));
+                    Car_SetSlaveVelocity(CAR_DEV_RIGHT, (uint32_t)(g_linear_velocity * 20.0f));
+
                     car_state = CAR_STATE_CALIBRATE_WHEEL; /* 跳转到轮子校准状态 */
                 }
                 break;
@@ -185,7 +200,7 @@ void Car_LockTask(void const *argument)
                         if (evt.status == osEventMessage)
                         {
                             CarCanMsg_t *pMsg = (CarCanMsg_t *)evt.value.p;
-                            if (pMsg->id == 0x409 && pMsg->len >= 6)
+                            if (pMsg->id == 0x409)
                             {
                                 uint8_t dev_id;
                                 float pos = Car_ParseMotorPosition(pMsg->data, &dev_id);
@@ -286,12 +301,12 @@ void Car_LockTask(void const *argument)
         osDelay(10);
     }
 }
-uint16_t num_i = 0;
+
 /**
   * @brief  小车运行测试任务：前进 -> 后退 往复
   * @param  argument 未使用
   * @retval 无
-  * @note   使用全局变量 g_test_distance，固定等待 3 秒
+  * @note   使用全局变量 g_test_distance，使用角度PID控制保持直线
   */
 void Car_TestTask(void const *argument)
 {
@@ -302,19 +317,74 @@ void Car_TestTask(void const *argument)
 
     for (;num_i<10;num_i++)
     {
-        /* 前进 g_test_distance */
-        Car_MoveForward(g_test_distance);
-        osDelay(12000); /* 固定等待 3 秒 */
+        /* 前进 g_test_distance - 使用角度PID控制保持直线 */
+        {
+            uint8_t left_dev = Car_GetLeftDevID();
+            uint8_t right_dev = Car_GetRightDevID();
+            
+            /* 1. 读取初始基准角度 */
+            float base_angle = TIM_GetAngle();
+	        base_angle = 0;
+            /* 2. 初始化PID控制器 */
+            PID_State_t pid_state;
+            PID_Reset(&pid_state);
+            
+            /* 3. 发送前进命令 */
+            Car_MoveForward(g_test_distance);
+            
+            /* 4. 循环读取角度并PID校正，每10ms一次 */
+            uint32_t elapsed = 0;
+            const uint32_t max_time = 8000;  /* 最多等待4秒 */
+            const float dt = 0.01f;  /* 10ms = 0.01秒 */
+            
+            while (elapsed < max_time) {
+                osDelay(10);
+                elapsed += 10;
+                
+                /* 读取当前角度 */
+                float current_angle = TIM_GetAngle();
+                
+                /* 计算角度误差（期望角度 - 实际角度） */
+                /* 目标是保持基准角度不变 */
+                float angle_error = base_angle - current_angle;
+                
+                /* 处理角度跨越±180度的情况 */
+                if (angle_error > 180.0f) {
+                    angle_error -= 360.0f;
+                } else if (angle_error < -180.0f) {
+                    angle_error += 360.0f;
+                }
 
-        /* 右转：使用角度判断，每10ms检查一次 */
+                /* 导出到全局，便于调试查看 */
+                g_angle_error = angle_error;
+
+                /* PID计算补偿量 */
+                float compensation = PID_Calculate(&pid_state, angle_error, dt);
+                
+                /* 只补偿右轮以保持直线 */
+                /* angle_error > 0: 顺时针偏转（右轮快了） → 右轮负补偿（减速） */
+                /* angle_error < 0: 逆时针偏转（右轮慢了） → 右轮正补偿（加速） */
+                if (fabsf(compensation) > 0.1f) {  /* 补偿阈值0.5mm */
+                    /* 直接用 -compensation 补偿右轮：
+                       angle_error > 0 → compensation > 0 → 右轮得到负补偿
+                       angle_error < 0 → compensation < 0 → 右轮得到正补偿 */
+                    Car_SetSlaveDisplacement(right_dev, compensation);
+                }
+            }
+            
+            /* 前进完成，等待稳定 */
+            osDelay(100);
+        }
+
+        /* 右转:使用角度判断,每2ms检查一次 */
         {
             float prev_angle = TIM_GetAngle();
             float accumulated_angle = 0.0f;
 
-            /* 发送右转命令（开始旋转） */
+            /* 发送右转命令(开始旋转) */
             Car_TurnLeft(g_turn_distance);
 
-            /* 每10ms检查一次角度变化并累加绝对值，直到达到目标角度 */
+            /* 每2ms检查一次角度变化并累加绝对值,直到达到目标角度 */
             while (1)
             {
                 osDelay(2);
@@ -339,7 +409,7 @@ void Car_TestTask(void const *argument)
             }
         }
 
-        /* 小间隔，确保角度稳定 */
+        /* 小间隔,确保角度稳定 */
         osDelay(500);
     }
 }
