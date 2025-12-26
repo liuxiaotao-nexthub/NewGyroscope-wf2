@@ -272,11 +272,11 @@ static void Gyro_ProcessTask(void const *argument)
                         segment_sum = 0.0f;
                         samples_in_segment = 0;
                         
-                        /* 如果已经收集完5段数据（共1000个样本） */
+                        /* 如果已经收集完3段数据（共150个样本） */
                         if (segment_index >= STABLE_CHECK_TIMES)
                         {
-                            /* 取中间段（第3段，索引2）的平均值更新 bias */
-                            float middle_segment_mean = segment_means[2];
+                            /* 取中间段（第2段，索引1）的平均值更新 bias */
+                            float middle_segment_mean = segment_means[1];
                         
                             /* 使用 EMA 滤波平滑更新 bias */
                             if (!bias_initialized)

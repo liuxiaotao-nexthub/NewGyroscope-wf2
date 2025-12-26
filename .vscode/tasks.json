@@ -17,6 +17,7 @@
             "problemMatcher": [
                 "$gcc"
             ],
+            "save": "always",
             "group": {
                 "kind": "build",
                 "isDefault": true
@@ -45,6 +46,7 @@
                 }
             },
             "problemMatcher": [],
+            "save": "always",
             "detail": "清理编译输出"
         },
         {
@@ -61,6 +63,7 @@
             "problemMatcher": [
                 "$gcc"
             ],
+            "save": "always",
             "detail": "清理后重新编译"
         },
         {
@@ -80,6 +83,7 @@
                 "$msCompile"
             ],
             "group": "build",
+            "save": "always",
             "detail": "使用MSBuild编译（需要VS2022和VisualGDB）"
         },
         {
