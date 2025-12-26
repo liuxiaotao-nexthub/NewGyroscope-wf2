@@ -1,0 +1,126 @@
+{
+    "tasks": [
+        {
+            "label": "Build STM32 (Makefile)",
+            "type": "shell",
+            "command": "C:\\msys64\\usr\\bin\\make.exe",
+            "args": [
+                "all",
+                "-j4"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "PATH": "C:\\SysGCC\\arm-eabi\\bin;${env:PATH}"
+                }
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": false
+            },
+            "detail": "使用Makefile编译STM32项目"
+        },
+        {
+            "label": "Clean STM32",
+            "type": "shell",
+            "command": "C:\\msys64\\usr\\bin\\make.exe",
+            "args": [
+                "clean"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "PATH": "C:\\SysGCC\\arm-eabi\\bin;${env:PATH}"
+                }
+            },
+            "problemMatcher": [],
+            "detail": "清理编译输出"
+        },
+        {
+            "label": "Rebuild STM32",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-Command",
+                "\"$env:PATH='C:\\SysGCC\\arm-eabi\\bin;'+$env:PATH; C:\\msys64\\usr\\bin\\make.exe clean; C:\\msys64\\usr\\bin\\make.exe all -j4\""
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "detail": "清理后重新编译"
+        },
+        {
+            "label": "Build via MSBuild (VisualGDB)",
+            "type": "shell",
+            "command": "msbuild",
+            "args": [
+                "NewGyroscope.sln",
+                "/p:Configuration=Debug",
+                "/p:Platform=VisualGDB",
+                "/t:Build"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [
+                "$msCompile"
+            ],
+            "group": "build",
+            "detail": "使用MSBuild编译（需要VS2022和VisualGDB）"
+        },
+        {
+            "label": "Flash STM32 (OpenOCD)",
+            "type": "shell",
+            "command": "C:\\Users\\liuxi\\AppData\\Local\\VisualGDB\\EmbeddedDebugPackages\\com.sysprogs.arm.openocd\\bin\\openocd.exe",
+            "args": [
+                "-f", "interface/cmsis-dap.cfg",
+                "-c", "transport select swd",
+                "-c", "adapter speed 3000",
+                "-f", "target/stm32f1x.cfg",
+                "-c", "init",
+                "-c", "reset init",
+                "-c", "flash write_image erase VisualGDB/Debug/NewGyroscope.elf",
+                "-c", "reset",
+                "-c", "shutdown"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": false
+            },
+            "detail": "使用OpenOCD烧录固件到STM32"
+        },
+        {
+            "label": "Build and Flash STM32",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "Build STM32 (Makefile)",
+                "Flash STM32 (OpenOCD)"
+            ],
+            "problemMatcher": [],
+            "detail": "编译并烧录到STM32"
+        }
+    ],
+    "version": "2.0.0"
+}

@@ -43,8 +43,8 @@ typedef enum {
 float g_linear_velocity = 1500.0f;      /* 直线运动速度 (mm/s) */
 float g_rotation_velocity = 600.0f;     /* 旋转速度 (mm/s) */
 float g_acceleration = 2000.0f;         /* 加速度 (mm/s²) */
-float g_test_distance = 2000.0f;         /* 测试距离 (mm) */
-float g_turn_distance = 620.0f;         /* 旋转位移 (mm) - 两轮各600mm刚好180° */
+float g_test_distance = 5000.0f;         /* 测试距离 (mm) */
+float g_turn_distance = 615.0f;         /* 旋转位移 (mm) - 两轮各600mm刚好180° */
 float g_target_angle = 180.0f;          /* 目标旋转角度 (度) */
 
 /* 全局角度误差，便于调试/查看 */
@@ -171,8 +171,8 @@ void Car_LockTask(void const *argument)
                     Car_SetSlaveAcceleration(CAR_DEV_RIGHT, (uint32_t)(g_acceleration * 20.0f));
 
                     /* 6. 设置从速度为 g_linear_velocity（以 0.1mm/s 单位发送） */
-                    Car_SetSlaveVelocity(CAR_DEV_LEFT, (uint32_t)(g_linear_velocity * 20.0f));
-                    Car_SetSlaveVelocity(CAR_DEV_RIGHT, (uint32_t)(g_linear_velocity * 20.0f));
+                    Car_SetSlaveVelocity(CAR_DEV_LEFT, (uint32_t)(g_linear_velocity * 30.0f));
+                    Car_SetSlaveVelocity(CAR_DEV_RIGHT, (uint32_t)(g_linear_velocity * 30.0f));
 
                     car_state = CAR_STATE_CALIBRATE_WHEEL; /* 跳转到轮子校准状态 */
                 }
@@ -330,12 +330,12 @@ void Car_TestTask(void const *argument)
             PID_Reset(&pid_state);
             
             /* 3. 发送前进命令 */
-            Car_MoveForward(g_test_distance);
+//            Car_MoveForward(g_test_distance);
             
-            /* 4. 循环读取角度并PID校正，每10ms一次 */
+            /* 4. 循环读取角度并PID校正，每5ms一次 */
             uint32_t elapsed = 0;
-            const uint32_t max_time = 8000;  /* 最多等待4秒 */
-            const float dt = 0.01f;  /* 10ms = 0.01秒 */
+            const uint32_t max_time = 8000;  /* 最多等待8秒 */
+            const float dt = 0.005f;  /* 5ms = 0.005秒 */
             
             while (elapsed < max_time) {
                 osDelay(10);
@@ -364,7 +364,7 @@ void Car_TestTask(void const *argument)
                 /* 只补偿右轮以保持直线 */
                 /* angle_error > 0: 顺时针偏转（右轮快了） → 右轮负补偿（减速） */
                 /* angle_error < 0: 逆时针偏转（右轮慢了） → 右轮正补偿（加速） */
-                if (fabsf(compensation) > 0.1f) {  /* 补偿阈值0.5mm */
+                if (fabsf(compensation) > 0.05f) {  /* 补偿阈值0.05mm - 更精细的控制 */
                     /* 直接用 -compensation 补偿右轮：
                        angle_error > 0 → compensation > 0 → 右轮得到负补偿
                        angle_error < 0 → compensation < 0 → 右轮得到正补偿 */
@@ -373,7 +373,7 @@ void Car_TestTask(void const *argument)
             }
             
             /* 前进完成，等待稳定 */
-            osDelay(100);
+            osDelay(1000);
         }
 
         /* 右转:使用角度判断,每2ms检查一次 */
@@ -410,7 +410,7 @@ void Car_TestTask(void const *argument)
         }
 
         /* 小间隔,确保角度稳定 */
-        osDelay(500);
+        osDelay(2000);
     }
 }
 

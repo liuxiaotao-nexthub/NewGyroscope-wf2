@@ -1,0 +1,41 @@
+{
+    "configurations": [
+        {
+            "name": "STM32",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/include",
+                "C:/Users/liuxi/AppData/Local/VisualGDB/EmbeddedBSPs/arm-eabi/com.sysprogs.arm.stm32/STM32F1xxxx/STM32F1xx_HAL_Driver/Inc",
+                "C:/Users/liuxi/AppData/Local/VisualGDB/EmbeddedBSPs/arm-eabi/com.sysprogs.arm.stm32/STM32F1xxxx/STM32F1xx_HAL_Driver/Inc/Legacy",
+                "C:/Users/liuxi/AppData/Local/VisualGDB/EmbeddedBSPs/arm-eabi/com.sysprogs.arm.stm32/STM32F1xxxx/CMSIS_HAL/Core/Include",
+                "C:/Users/liuxi/AppData/Local/VisualGDB/EmbeddedBSPs/arm-eabi/com.sysprogs.arm.stm32/STM32F1xxxx/CMSIS_HAL/Device/ST/STM32F1xx/Include",
+                "C:/Users/liuxi/AppData/Local/VisualGDB/EmbeddedBSPs/arm-eabi/com.sysprogs.arm.stm32/STM32F1xxxx/CMSIS_HAL/Include",
+                "C:/Users/liuxi/AppData/Local/VisualGDB/EmbeddedBSPs/arm-eabi/com.sysprogs.arm.stm32/STM32F1xxxx/CMSIS_HAL/RTOS2/Include",
+                "C:/Users/liuxi/AppData/Local/VisualGDB/EmbeddedBSPs/arm-eabi/com.sysprogs.arm.stm32/FreeRTOS/Source/CMSIS_RTOS",
+                "C:/Users/liuxi/AppData/Local/VisualGDB/EmbeddedBSPs/arm-eabi/com.sysprogs.arm.stm32/FreeRTOS/Source/include",
+                "C:/Users/liuxi/AppData/Local/VisualGDB/EmbeddedBSPs/arm-eabi/com.sysprogs.arm.stm32/FreeRTOS/Source/portable/GCC/ARM_CM3",
+                "C:/SysGCC/arm-eabi/arm-none-eabi/include",
+                "C:/SysGCC/arm-eabi/lib/gcc/arm-none-eabi/14.2.1/include"
+            ],
+            "defines": [
+                "ARM_MATH_CM3",
+                "flash_layout",
+                "STM32F103C8",
+                "STM32F103xB",
+                "USE_HAL_DRIVER",
+                "USE_FREERTOS",
+                "DEBUG=1"
+            ],
+            "compilerPath": "C:/SysGCC/arm-eabi/bin/arm-none-eabi-gcc.exe",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "gcc-arm",
+            "compilerArgs": [
+                "-mthumb",
+                "-mcpu=cortex-m3",
+                "-mfloat-abi=soft"
+            ]
+        }
+    ],
+    "version": 4
+}

@@ -8,10 +8,10 @@ extern "C" {
 #include <../CMSIS_RTOS/cmsis_os.h>
 #include <stdint.h>
 
-/* È«¾Ö»º´æ£¬ÓÉ²ÉÑùÈÎÎñ¸üĞÂ¡¢·¢ËÍÈÎÎñ¶ÁÈ¡£¨ÎŞ»¥³â£© */
+/* å…¨å±€ç¼“å­˜ï¼Œå¯ä»é™€èºä»ªä»»åŠ¡æ›´æ–°ã€é™€èºä»ªå‘é€ä»»åŠ¡è¯»å–ï¼ˆæ— äº’æ–¥ä¿æŠ¤ï¼‰ */
 extern volatile int32_t can_rate_fp;
 extern volatile int32_t can_angle_fp;
-extern volatile int32_t can_temp_fp; /* ÎÂ¶È¶¨µã *100 */
+extern volatile int32_t can_temp_fp; /* æ¸©åº¦å®šç‚¹æ•° *100 */
 extern volatile uint8_t can_statusReg;
 
 void CAN_ControlTask(void const *argument);

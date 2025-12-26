@@ -40,7 +40,21 @@
     <ToolchainVersion>14.2.1/15.2/r2</ToolchainVersion>
     <MCUPropertyListFile>$(ProjectDir)stm32.props</MCUPropertyListFile>
   </PropertyGroup>
-  <ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|VisualGDB'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>..;include;%(ClCompile.AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>DEBUG=1;%(ClCompile.PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalOptions />
+      <CLanguageStandard />
+      <CPPLanguageStandard />
+    </ClCompile>
+    <Link>
+      <LibrarySearchDirectories>%(Link.LibrarySearchDirectories)</LibrarySearchDirectories>
+      <AdditionalLibraryNames>%(Link.AdditionalLibraryNames)</AdditionalLibraryNames>
+      <AdditionalLinkerInputs>%(Link.AdditionalLinkerInputs)</AdditionalLinkerInputs>
+      <LinkerScript />
+      <AdditionalOptions />
+    </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
   </ItemGroup>
@@ -48,22 +62,24 @@
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
   <ItemGroup>
-    <ClCompile Include="can.c" />
-    <ClCompile Include="can_task.c" />
-    <ClCompile Include="car.c" />
-    <ClCompile Include="car_task.c" />
-    <ClCompile Include="NewGyroscope.c" />
-    <ClCompile Include="PID.c" />
-    <ClCompile Include="spi.c" />
-    <ClCompile Include="system_stm32f1xx.c" />
-    <ClCompile Include="tim.c" />
-    <ClCompile Include="xv7001bb.c" />
-    <ClInclude Include="can_task.h" />
-    <ClInclude Include="car.h" />
-    <ClInclude Include="car_task.h" />
-    <ClInclude Include="PID.h" />
-    <ClInclude Include="tim.h" />
-    <ClInclude Include="xv7001bb.h" />
+    <ClCompile Include="src\can.c" />
+    <ClCompile Include="src\can_task.c" />
+    <ClCompile Include="src\car.c" />
+    <ClCompile Include="src\car_task.c" />
+    <ClCompile Include="src\NewGyroscope.c" />
+    <ClCompile Include="src\PID.c" />
+    <ClCompile Include="src\spi.c" />
+    <ClCompile Include="src\system_stm32f1xx.c" />
+    <ClCompile Include="src\tim.c" />
+    <ClCompile Include="src\xv7001bb.c" />
+    <ClInclude Include="include\can.h" />
+    <ClInclude Include="include\can_task.h" />
+    <ClInclude Include="include\car.h" />
+    <ClInclude Include="include\car_task.h" />
+    <ClInclude Include="include\PID.h" />
+    <ClInclude Include="include\spi.h" />
+    <ClInclude Include="include\tim.h" />
+    <ClInclude Include="include\xv7001bb.h" />
     <None Include="stm32.props" />
     <ClCompile Include="$(BSP_ROOT)\STM32F1xxxx\StartupFiles\startup_stm32f103xb.c" />
     <ClCompile Include="$(BSP_ROOT)\FreeRTOS\Source\croutine.c" />
@@ -137,9 +153,7 @@
     <ClCompile Include="$(BSP_ROOT)\STM32F1xxxx\STM32F1xx_HAL_Driver\Src\stm32f1xx_ll_tim.c" />
     <ClCompile Include="$(BSP_ROOT)\STM32F1xxxx\STM32F1xx_HAL_Driver\Src\stm32f1xx_ll_usart.c" />
     <ClCompile Include="$(BSP_ROOT)\STM32F1xxxx\STM32F1xx_HAL_Driver\Src\stm32f1xx_ll_utils.c" />
-    <ClInclude Include="can.h" />
     <ClInclude Include="FreeRTOSConfig.h" />
-    <ClInclude Include="spi.h" />
     <ClInclude Include="stm32f1xx_hal_conf.h" />
     <ClInclude Include="$(BSP_ROOT)\FreeRTOS\Source\CMSIS_RTOS\cmsis_os.h" />
     <ClInclude Include="$(BSP_ROOT)\FreeRTOS\Source\include\atomic.h" />
