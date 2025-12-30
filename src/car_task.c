@@ -315,17 +315,10 @@ void Car_TestTask(void const *argument)
     /* 任务启动时立即挂起，等待锁定任务解挂 */
     vTaskSuspend(NULL);
 
-     /* 初始化两个基准：initial_base = 第一次读取的角度，alternate_base = initial_base - 180
-         使用 if 归一化到 [-180, 180]，交替使用这两个基准作为直走参考，循环10次，第一次使用 initial_base */
-     float initial_base = TIM_GetAngle();
-     if (initial_base > 180.0f) { initial_base -= 360.0f; }
-     if (initial_base < -180.0f) { initial_base += 360.0f; }
-     float alternate_base = initial_base - 180.0f;
-     if (alternate_base > 180.0f) { alternate_base -= 360.0f; }
-     if (alternate_base < -180.0f) { alternate_base += 360.0f; }
+     /* 每次直走前读取一次角度作为直走基准(base_angle)，旋转校准基准使用 base_angle - 180°（归一化） */
 
-     float current_base = initial_base;
-     int use_initial = 1; /* 1 表示当前使用 initial_base，0 表示使用 alternate_base */
+    /* 基准角变量，直走开始时读取并在旋转阶段使用 */
+    float base_angle = 0.0f;
 
     for (; num_i < 10; num_i++)
     {
@@ -335,8 +328,10 @@ void Car_TestTask(void const *argument)
             uint8_t right_dev = Car_GetRightDevID();
             
             /* 1. 读取初始基准角度 */
-            /* 使用交替基准，不再实时读取 */
-            float base_angle = current_base;
+            /* 每次直走开始时读取当前角度作为基准 */
+            base_angle = TIM_GetAngle();
+            if (base_angle > 180.0f) { base_angle -= 360.0f; }
+            if (base_angle < -180.0f) { base_angle += 360.0f; }
             // base_angle = 0;
             
             /* 2. 初始化PID控制器 */
@@ -428,8 +423,8 @@ void Car_TestTask(void const *argument)
             {
                 uint8_t left_dev = Car_GetLeftDevID();
                 uint8_t right_dev = Car_GetRightDevID();
-                    /* 计算目标角度：当前基准减去旋转角度（左转），应该接近另一个基准 */
-                    float target_angle = current_base - g_target_angle;  /* 左转为负，相当于切换到另一个基准 */
+                    /* 计算目标角度：使用直走时读取的 base_angle 减去旋转角度（左转），即 base_angle - 180° */
+                    float target_angle = base_angle - g_target_angle;  /* 左转为负 */
                 
                 /* 归一化目标角度到 ±180度范围 */
                 while (target_angle > 180.0f) {
@@ -480,13 +475,7 @@ void Car_TestTask(void const *argument)
                         Car_SetSlaveDisplacement(left_dev, half_comp);
                     }
                 }
-                /* 旋转并校准完成后，切换基准：initial_base <-> alternate_base */
-                if (use_initial) {
-                    current_base = alternate_base;
-                } else {
-                    current_base = initial_base;
-                }
-                use_initial = !use_initial;
+                /* 无需切换基准：每次直走阶段会重新读取基准 */
             }
         }
 
