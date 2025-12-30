@@ -348,13 +348,13 @@ void Car_TestTask(void const *argument)
             
             /* 4. 循环读取角度并PID校正，每5ms一次 */
             uint32_t elapsed = 0;
-            const uint32_t max_time = 7000;  /* 最多等待8秒 */
+            const uint32_t max_time = 6000;  /* 最多等待8秒 */
             const float dt = 0.01f;  /* 10ms = 0.01秒 */
             int slave_cleared = 0;  /* 标志位：是否已清除从位移 */
             
             while (elapsed < max_time) {
-                osDelay(100);
-                elapsed += 100;
+                osDelay(50);
+                elapsed += 50;
                 
                 /* 读取当前角度 */
                 float current_angle = TIM_GetAngle();
@@ -379,7 +379,7 @@ void Car_TestTask(void const *argument)
                /* 左右轮差分补偿以保持直线 */
                /* angle_error > 0: 顺时针偏转 → 右轮减速、左轮加速 */
                /* angle_error < 0: 逆时针偏转 → 右轮加速、左轮减速 */
-                if (fabsf(compensation) > 1.0f) {  /* 补偿阈值0.05mm - 更精细的控制 */
+                if (fabsf(compensation) > 0.1f) {  /* 补偿阈值0.05mm - 更精细的控制 */
                    /* 补偿量的一半分配给每个轮子，方向相反 */
                    float half_comp = compensation / 1.0f;
                    /* 仅调整左轮 */
@@ -450,8 +450,8 @@ void Car_TestTask(void const *argument)
                 int slave_cleared = 0;
                 
                 while (elapsed < calibration_time) {
-                    osDelay(100);
-                    elapsed += 100;
+                    osDelay(50);
+                    elapsed += 50;
                     
                     /* 读取当前角度 */
                     float current_angle = TIM_GetAngle();
@@ -473,7 +473,7 @@ void Car_TestTask(void const *argument)
                     float compensation = PID_Calculate(&pid_state, angle_error, dt);
                     
                     /* 使用从位移进行旋转角度校正 */
-                    if (fabsf(compensation) > 1.0f) {
+                    if (fabsf(compensation) > 0.1f) {
                         /* 补偿量分配给两个轮子 */
                         float half_comp = compensation / 1.0f;
                         /* 仅调整左轮进行角度校正 */
