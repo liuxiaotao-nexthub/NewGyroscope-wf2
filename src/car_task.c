@@ -41,7 +41,7 @@ typedef enum {
 /* Private variables ---------------------------------------------------------*/
 /* 运动参数全局变量（可在GDB调试时修改） */
 float g_linear_velocity = 1500.0f;      /* 直线运动速度 (mm/s) */
-float g_rotation_velocity = 500.0f;     /* 旋转速度 (mm/s) */
+float g_rotation_velocity = 1500.0f;     /* 旋转速度 (mm/s) */
 float g_acceleration = 1000.0f;         /* 加速度 (mm/s²) */
 float g_test_distance = 5000.0f;         /* 测试距离 (mm) */
 float g_turn_distance = 613.0f;         /* 旋转位移 (mm) - 两轮各600mm刚好180° */
@@ -315,7 +315,19 @@ void Car_TestTask(void const *argument)
     /* 任务启动时立即挂起，等待锁定任务解挂 */
     vTaskSuspend(NULL);
 
-    for (;num_i<10;num_i++)
+     /* 初始化两个基准：initial_base = 第一次读取的角度，alternate_base = initial_base - 180
+         使用 if 归一化到 [-180, 180]，交替使用这两个基准作为直走参考，循环10次，第一次使用 initial_base */
+     float initial_base = TIM_GetAngle();
+     if (initial_base > 180.0f) { initial_base -= 360.0f; }
+     if (initial_base < -180.0f) { initial_base += 360.0f; }
+     float alternate_base = initial_base - 180.0f;
+     if (alternate_base > 180.0f) { alternate_base -= 360.0f; }
+     if (alternate_base < -180.0f) { alternate_base += 360.0f; }
+
+     float current_base = initial_base;
+     int use_initial = 1; /* 1 表示当前使用 initial_base，0 表示使用 alternate_base */
+
+    for (; num_i < 10; num_i++)
     {
         /* 前进 g_test_distance - 使用角度PID控制保持直线 */
         {
@@ -323,24 +335,26 @@ void Car_TestTask(void const *argument)
             uint8_t right_dev = Car_GetRightDevID();
             
             /* 1. 读取初始基准角度 */
-            float base_angle = TIM_GetAngle();
-//	        base_angle = 0;
+            /* 使用交替基准，不再实时读取 */
+            float base_angle = current_base;
+            // base_angle = 0;
+            
             /* 2. 初始化PID控制器 */
             PID_State_t pid_state;
             PID_Reset(&pid_state);
             
             /* 3. 发送前进命令 */
-             Car_MoveForward(g_test_distance);
+            Car_MoveForward(g_test_distance);
             
             /* 4. 循环读取角度并PID校正，每5ms一次 */
             uint32_t elapsed = 0;
-            const uint32_t max_time = 6000;  /* 最多等待8秒 */
-            const float dt = 0.005f;  /* 5ms = 0.005秒 */
+            const uint32_t max_time = 7000;  /* 最多等待8秒 */
+            const float dt = 0.01f;  /* 10ms = 0.01秒 */
             int slave_cleared = 0;  /* 标志位：是否已清除从位移 */
             
             while (elapsed < max_time) {
-                osDelay(5);
-                elapsed += 5;
+                osDelay(100);
+                elapsed += 100;
                 
                 /* 读取当前角度 */
                 float current_angle = TIM_GetAngle();
@@ -360,39 +374,30 @@ void Car_TestTask(void const *argument)
                 g_angle_error = angle_error;
 
                 /* PID计算补偿量 */
-//                float compensation = PID_Calculate(&pid_state, angle_error, dt);
-//                
-//                /* 左右轮差分补偿以保持直线 */
-//                /* angle_error > 0: 顺时针偏转 → 右轮减速、左轮加速 */
-//                /* angle_error < 0: 逆时针偏转 → 右轮加速、左轮减速 */
-//                if (fabsf(compensation) > 0.05f) {  /* 补偿阈值0.05mm - 更精细的控制 */
-//                    /* 重置清除标志 */
-//                    slave_cleared = 0;
-//                    
-//                    /* 补偿量的一半分配给每个轮子，方向相反 */
-//                    float half_comp = compensation / 2.0f;
-//                    Car_SetSlaveDisplacement(right_dev, half_comp);   /* 右轮补偿 */
-//                    Car_SetSlaveDisplacement(left_dev, half_comp);   /* 左轮反向补偿 */
-//                } else {
-//                    /* 补偿量过小时，只设置一次0.1mm清除残留 */
-//                    if (!slave_cleared) {
-//                        Car_SetSlaveDisplacement(right_dev, 0.1f);
-//                        Car_SetSlaveDisplacement(left_dev, 0.1f);
-//                        slave_cleared = 1;  /* 标记已清除 */
-//                    }
-//                }
+               float compensation = PID_Calculate(&pid_state, angle_error, dt);
+               
+               /* 左右轮差分补偿以保持直线 */
+               /* angle_error > 0: 顺时针偏转 → 右轮减速、左轮加速 */
+               /* angle_error < 0: 逆时针偏转 → 右轮加速、左轮减速 */
+                if (fabsf(compensation) > 1.0f) {  /* 补偿阈值0.05mm - 更精细的控制 */
+                   /* 补偿量的一半分配给每个轮子，方向相反 */
+                   float half_comp = compensation / 1.0f;
+                   /* 仅调整左轮 */
+                   Car_SetSlaveDisplacement(left_dev, half_comp);
+               }
             }
             
             /* 前进完成，等待稳定 */
             osDelay(2000);
         }
 
-        /* 右转:使用角度判断,每2ms检查一次 */
+        /* 左转:使用角度判断,每2ms检查一次 */
         {
+            /* 旋转开始前，使用当前基准的角度作为参考，旋转目标为 current_base - g_target_angle */
             float prev_angle = TIM_GetAngle();
             float accumulated_angle = 0.0f;
 
-            /* 发送右转命令(开始旋转) */
+            /* 发送左转命令(开始旋转) */
             Car_TurnLeft(g_turn_distance);
 
             /* 每2ms检查一次角度变化并累加绝对值,直到达到目标角度 */
@@ -418,10 +423,75 @@ void Car_TestTask(void const *argument)
                     break;
                 }
             }
+	        osDelay(1000);
+            /* 旋转完成后的角度校准 - 使用PID补偿旋转误差 */
+            {
+                uint8_t left_dev = Car_GetLeftDevID();
+                uint8_t right_dev = Car_GetRightDevID();
+                    /* 计算目标角度：当前基准减去旋转角度（左转），应该接近另一个基准 */
+                    float target_angle = current_base - g_target_angle;  /* 左转为负，相当于切换到另一个基准 */
+                
+                /* 归一化目标角度到 ±180度范围 */
+                while (target_angle > 180.0f) {
+                    target_angle -= 360.0f;
+                }
+                while (target_angle < -180.0f) {
+                    target_angle += 360.0f;
+                }
+                
+                /* 初始化PID控制器 */
+                PID_State_t pid_state;
+                PID_Reset(&pid_state);
+                
+                /* 循环校准3秒 */
+                uint32_t elapsed = 0;
+                const uint32_t calibration_time = 2000;  /* 3秒校准时间 */
+                const float dt = 0.05f;  /* 50ms = 0.05秒 */
+                int slave_cleared = 0;
+                
+                while (elapsed < calibration_time) {
+                    osDelay(100);
+                    elapsed += 100;
+                    
+                    /* 读取当前角度 */
+                    float current_angle = TIM_GetAngle();
+                    
+                    /* 计算角度误差（目标角度 - 实际角度） */
+                    float angle_error = target_angle - current_angle;
+                    
+                    /* 处理角度跨越±180度的情况 */
+                    if (angle_error > 180.0f) {
+                        angle_error -= 360.0f;
+                    } else if (angle_error < -180.0f) {
+                        angle_error += 360.0f;
+                    }
+                    
+                    /* 导出到全局，便于调试查看 */
+                    g_angle_error = angle_error;
+                    
+                    /* PID计算补偿量 */
+                    float compensation = PID_Calculate(&pid_state, angle_error, dt);
+                    
+                    /* 使用从位移进行旋转角度校正 */
+                    if (fabsf(compensation) > 1.0f) {
+                        /* 补偿量分配给两个轮子 */
+                        float half_comp = compensation / 1.0f;
+                        /* 仅调整左轮进行角度校正 */
+                        Car_SetSlaveDisplacement(left_dev, half_comp);
+                    }
+                }
+                /* 旋转并校准完成后，切换基准：initial_base <-> alternate_base */
+                if (use_initial) {
+                    current_base = alternate_base;
+                } else {
+                    current_base = initial_base;
+                }
+                use_initial = !use_initial;
+            }
         }
 
         /* 小间隔,确保角度稳定 */
-        osDelay(2000);
+        osDelay(500);
     }
 }
 

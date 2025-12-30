@@ -224,36 +224,30 @@ static void Gyro_ProcessTask(void const *argument)
             /* === 环形缓冲区滑动窗口更新 === */
             if (zerobuf_count < ZEROBUF_SIZE)
             {
-                /* 初始填充阶段 */
+                /* 初始填充阶段：只更新缓冲区与均值累加 */
                 zerobuf[zerobuf_idx] = raw_rate;
                 zerobuf_sum += raw_rate;
-                zerobuf_sumsq += raw_rate * raw_rate;
                 zerobuf_count++;
                 zerobuf_idx++;
                 if (zerobuf_idx >= ZEROBUF_SIZE) zerobuf_idx = 0;
             }
             else
             {
-                /* 滑动窗口更新：移除最旧数据，加入新数据 */
+                /* 滑动窗口更新：移除最旧数据，加入新数据（仅维护均值相关量） */
                 float old_value = zerobuf[zerobuf_idx];
                 zerobuf_sum -= old_value;
-                zerobuf_sumsq -= old_value * old_value;
-                
+
                 zerobuf[zerobuf_idx] = raw_rate;
                 zerobuf_sum += raw_rate;
-                zerobuf_sumsq += raw_rate * raw_rate;
-                
+
                 zerobuf_idx++;
                 if (zerobuf_idx >= ZEROBUF_SIZE) zerobuf_idx = 0;
-                
-                /* 计算当前滑动窗口的均值与方差 */
+
+                /* 计算当前滑动窗口的均值（不再计算方差） */
                 gyro_mean = zerobuf_sum / (float)ZEROBUF_SIZE;
-                float msq = zerobuf_sumsq / (float)ZEROBUF_SIZE;
-                gyro_var = msq - gyro_mean * gyro_mean;
-                if (gyro_var < 0.0f) gyro_var = 0.0f;
-                
-                /* === 静止检测状态机 === */
-                if (gyro_var < VAR_THRESHOLD && fabsf(gyro_mean) < MEAN_THRESHOLD)
+
+                /* === 静止检测：仅使用均值绝对值判断是否接近零漂基线 === */
+                if (fabsf(gyro_mean) < MEAN_THRESHOLD)
                 {
                     /* 满足静止条件，开始分段统计 */
                     
@@ -300,7 +294,7 @@ static void Gyro_ProcessTask(void const *argument)
                 }
                 else
                 {
-                    /* 不满足静止条件，重置所有分段统计 */
+                    /* 不满足静止条件，重置分段统计（如果使用） */
                     segment_index = 0;
                     segment_sum = 0.0f;
                     samples_in_segment = 0;

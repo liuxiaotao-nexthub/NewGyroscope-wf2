@@ -13,14 +13,16 @@ float zerobuf[ZEROBUF_SIZE];
 int zerobuf_idx = 0;
 int zerobuf_count = 0;
 float zerobuf_sum = 0.0f;
-float zerobuf_sumsq = 0.0f;
 float bias = 0.0f;
 
 int bias_initialized = 0;
 
 /* 调试用全局变量 */
 float gyro_mean = 0.0f;
-float gyro_var = 0.0f;
+/* 仅保留用于调试的均值 */
+// float gyro_var; // variance removed
+
+/* 保留分段统计变量以匹配头文件和使用处（虽然不使用方差） */
 float segment_means[STABLE_CHECK_TIMES] = {0.0f};
 int segment_index = 0;
 int samples_in_segment = 0;
