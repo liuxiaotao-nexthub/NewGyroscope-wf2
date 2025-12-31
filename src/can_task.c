@@ -1,12 +1,15 @@
 #include "can.h"
 #include "xv7001bb.h"
 #include <../CMSIS_RTOS/cmsis_os.h>
+#include "queue.h"
 #include <stdint.h>
 #include <string.h>
 #include "tim.h"
 
 /* 外部变量（小车队列句柄，在 NewGyroscope.c 中定义） */
 extern osMessageQId CarCanQueueHandle;
+/* 引用 left_remaining_id（由 car_task.c 定义） */
+extern uint16_t left_remaining_id;
 
 /* CAN 发送任务实现：每10ms读取传感器并发送状态、温度、角速度和角度 */
 void CAN_SendTask(void const *argument)
@@ -89,14 +92,15 @@ void CAN_ControlTask(void const *argument)
             /* 清除全局接收标志 */
             CAN_RxFlag = 0;
 
-            /* 处理 0x312（SN 上报）和 0x409（电机位移）消息 */
-            if ((id == 0x312 && len == 7) || (id == 0x409))
+            /* 处理 0x312（SN 上报）、0x409（电机位移）以及 0x420+dev（剩余位移）消息 */
+            if ((id == 0x312 && len == 7) || (id == 0x409) || ((id >= 0x421 && id <= 0x42F) && ((uint32_t)id == left_remaining_id)))
             {
                 /* 将消息放入队列，供 Car_LockTask 处理 */
                 carMsg.id = id;
                 carMsg.len = len;
                 memcpy(carMsg.data, localData, len);
-                osMessagePut(CarCanQueueHandle, (uint32_t)&carMsg, 0);
+                /* 使用 xQueueOverwrite 覆盖旧数据（队列大小为1时适用） */
+                xQueueOverwrite(CarCanQueueHandle, &carMsg);
             }
         }
 

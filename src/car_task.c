@@ -14,6 +14,7 @@
 #include "tim.h"
 #include "PID.h"
 #include <../CMSIS_RTOS/cmsis_os.h>
+#include "queue.h"  
 #include <string.h>
 #include <math.h>
 
@@ -53,6 +54,9 @@ float g_angle_error = 0.0f;
 /* 测试循环计数器 */
 uint16_t num_i = 0;
 
+/* 接收左轮剩余位移的 CAN ID（0 表示未设置） */
+uint16_t left_remaining_id = 0;
+
 /* Private function prototypes -----------------------------------------------*/
 /* Private functions ---------------------------------------------------------*/
 
@@ -72,8 +76,7 @@ void Car_LockTask(void const *argument)
     uint8_t sn_right[7] = {0};
     int have_left = 0;
     int have_right = 0;
-
-    osEvent evt;
+    /* left_remaining_id moved to file-scope (defined below) */
 
     for (;;)
     {
@@ -85,15 +88,14 @@ void Car_LockTask(void const *argument)
                    收到每个 SN 后发送绑定命令（ID 0x313，7 字节 SN + 1 字节设备号）。
                    如果 100ms 内未收到数据，主动发送查询命令（ID 0x60D，数据 07 00）。
                 */
-                evt = osMessageGet(CarCanQueueHandle, 100); /* 等待 100ms */
-                if (evt.status == osEventMessage)
+                CarCanMsg_t rxMsg;
+                if (xQueueReceive(CarCanQueueHandle, &rxMsg, pdMS_TO_TICKS(100)) == pdTRUE)
                 {
-                    CarCanMsg_t *pMsg = (CarCanMsg_t *)evt.value.p;
-                    if (pMsg->id == 0x312 && pMsg->len == 7)
+                    if (rxMsg.id == 0x312 && rxMsg.len == 7)
                     {
                         if (!have_left)
                         {
-                            memcpy(sn_left, pMsg->data, 7);
+                            memcpy(sn_left, rxMsg.data, 7);
                             have_left = 1;
                             /* 发送左轮绑定命令（连续发送3遍） */
                             uint8_t buf[8];
@@ -108,9 +110,9 @@ void Car_LockTask(void const *argument)
                         else if (!have_right)
                         {
                             /* 判断接收到的 SN 与左轮 SN 是否不同 */
-                            if (memcmp(sn_left, pMsg->data, 7) != 0)
+                            if (memcmp(sn_left, rxMsg.data, 7) != 0)
                             {
-                                memcpy(sn_right, pMsg->data, 7);
+                                memcpy(sn_right, rxMsg.data, 7);
                                 have_right = 1;
                                 /* 发送右轮绑定命令（连续发送3遍） */
                                 uint8_t buf[8];
@@ -131,7 +133,7 @@ void Car_LockTask(void const *argument)
                         }
                     }
                 }
-                else if (evt.status == osEventTimeout)
+                else
                 {
                     /* 100ms 超时未收到数据，主动发送查询命令 */
                     uint8_t queryCmd[2] = {0x07, 0x00};
@@ -167,12 +169,12 @@ void Car_LockTask(void const *argument)
                     Car_SetVelocity(CAR_DEV_RIGHT, (uint32_t)(g_linear_velocity * 10.0f));
 
                     /* 5. 设置从加速度为 g_acceleration（以 0.1 单位发送） */
-                    Car_SetSlaveAcceleration(CAR_DEV_LEFT, (uint32_t)(g_acceleration * 20.0f));
-                    Car_SetSlaveAcceleration(CAR_DEV_RIGHT, (uint32_t)(g_acceleration * 20.0f));
+                    Car_SetSlaveAcceleration(CAR_DEV_LEFT, (uint32_t)(g_acceleration * 10.0f));
+                    Car_SetSlaveAcceleration(CAR_DEV_RIGHT, (uint32_t)(g_acceleration * 10.0f));
 
                     /* 6. 设置从速度为 g_linear_velocity（以 0.1mm/s 单位发送） */
-                    Car_SetSlaveVelocity(CAR_DEV_LEFT, (uint32_t)(g_linear_velocity * 30.0f));
-                    Car_SetSlaveVelocity(CAR_DEV_RIGHT, (uint32_t)(g_linear_velocity * 30.0f));
+                    Car_SetSlaveVelocity(CAR_DEV_LEFT, (uint32_t)(g_linear_velocity * 10.0f));
+                    Car_SetSlaveVelocity(CAR_DEV_RIGHT, (uint32_t)(g_linear_velocity * 10.0f));
 
                     car_state = CAR_STATE_CALIBRATE_WHEEL; /* 跳转到轮子校准状态 */
                 }
@@ -196,14 +198,13 @@ void Car_LockTask(void const *argument)
                         Car_ReadMotorPosition(CAR_DEV_LEFT);
 
                         /* 等待接收基准位移 */
-                        evt = osMessageGet(CarCanQueueHandle, 100);
-                        if (evt.status == osEventMessage)
+                        CarCanMsg_t rxMsg;
+                        if (xQueueReceive(CarCanQueueHandle, &rxMsg, pdMS_TO_TICKS(100)) == pdTRUE)
                         {
-                            CarCanMsg_t *pMsg = (CarCanMsg_t *)evt.value.p;
-                            if (pMsg->id == 0x409)
+                            if (rxMsg.id == 0x409)
                             {
                                 uint8_t dev_id;
-                                float pos = Car_ParseMotorPosition(pMsg->data, &dev_id);
+                                float pos = Car_ParseMotorPosition(rxMsg.data, &dev_id);
                                 if (dev_id == CAR_DEV_LEFT)
                                 {
                                     base_pos_left = pos;
@@ -217,14 +218,13 @@ void Car_LockTask(void const *argument)
                         /* 已获取基准位移，持续读取当前位移判断变化 */
                         Car_ReadMotorPosition(CAR_DEV_LEFT);
 
-                        evt = osMessageGet(CarCanQueueHandle, 100);
-                        if (evt.status == osEventMessage)
+                        CarCanMsg_t rxMsg;
+                        if (xQueueReceive(CarCanQueueHandle, &rxMsg, pdMS_TO_TICKS(100)) == pdTRUE)
                         {
-                            CarCanMsg_t *pMsg = (CarCanMsg_t *)evt.value.p;
-                            if (pMsg->id == 0x409 && pMsg->len >= 6)
+                            if (rxMsg.id == 0x409 && rxMsg.len >= 6)
                             {
                                 uint8_t dev_id;
-                                float pos = Car_ParseMotorPosition(pMsg->data, &dev_id);
+                                float pos = Car_ParseMotorPosition(rxMsg.data, &dev_id);
 
                                 if (dev_id == CAR_DEV_LEFT)
                                 {
@@ -275,6 +275,11 @@ void Car_LockTask(void const *argument)
                     uint8_t lock[2] = {0x07, 0x00};
                     CAN_SendData(0x60D, lock, 2);
 
+                    /* 记录左轮剩余位移ID：0x420 + left_dev */
+                    left_remaining_id = 0x420 + (uint16_t)left_dev;
+                    /* 动态向 CAN 硬件添加过滤器，仅接收左轮的剩余位移帧 */
+                    CAN_AddFilterForId(left_remaining_id);
+
                     car_state = CAR_STATE_DONE; /* 完成后转到 DONE 状态 */
                 }
                 break;
@@ -282,7 +287,7 @@ void Car_LockTask(void const *argument)
             case CAR_STATE_DONE:
                 /* 状态说明：完成绑定、初始化与上电使能并发送锁定命令后，解挂测试任务并自挂起 */
                 {
-	                osDelay(3000);
+	                osDelay(5000);
                     /* 解挂测试任务 */
                     if (CarTestTaskHandle != NULL)
                     {
@@ -332,54 +337,67 @@ void Car_TestTask(void const *argument)
             base_angle = TIM_GetAngle();
             if (base_angle > 180.0f) { base_angle -= 360.0f; }
             if (base_angle < -180.0f) { base_angle += 360.0f; }
-            // base_angle = 0;
+//            base_angle = 0;
             
-            /* 2. 初始化PID控制器 */
+            /* 2. PID控制器（仅用P值） */
             PID_State_t pid_state;
-            PID_Reset(&pid_state);
             
             /* 3. 发送前进命令 */
             Car_MoveForward(g_test_distance);
             
-            /* 4. 循环读取角度并PID校正，每5ms一次 */
-            uint32_t elapsed = 0;
-            const uint32_t max_time = 6000;  /* 最多等待8秒 */
-            const float dt = 0.01f;  /* 10ms = 0.01秒 */
-            int slave_cleared = 0;  /* 标志位：是否已清除从位移 */
+            /* 4. 通过消息队列接收剩余位移帧（ID = 0x420 + left_dev）
+               byte[0-3]: 主剩余位移（小端，单位0.1mm）
+               byte[4-7]: 从剩余位移（小端，单位0.1mm）
+               - 从剩余位移为0时：用PID计算补偿并执行
+               - 10秒后自动跳出循环 */
+            const float dt = 0.015f;  /* 15ms = 0.015秒 */
+            uint16_t target_id = 0x420 + (uint16_t)left_dev;  /* 剩余位移帧ID */
             
-            while (elapsed < max_time) {
-                osDelay(50);
-                elapsed += 50;
-                
-                /* 读取当前角度 */
-                float current_angle = TIM_GetAngle();
-                
-                /* 计算角度误差（期望角度 - 实际角度） */
-                /* 目标是保持基准角度不变 */
-                float angle_error = base_angle - current_angle;
-                
-                /* 处理角度跨越±180度的情况 */
-                if (angle_error > 180.0f) {
-                    angle_error -= 360.0f;
-                } else if (angle_error < -180.0f) {
-                    angle_error += 360.0f;
+            uint32_t elapsed = 0;  /* 已运行时间(ms) */
+            const uint32_t timeout_ms = 7000;  /* 10秒超时 */
+            
+            while (elapsed < timeout_ms) {
+                /* 从消息队列获取CAN帧（15ms超时） */
+                CarCanMsg_t rxMsg;
+                if (xQueueReceive(CarCanQueueHandle, &rxMsg, pdMS_TO_TICKS(15)) == pdTRUE) {
+                    
+                    /* 检查是否为目标剩余位移帧 */
+                    if (rxMsg.id == target_id && rxMsg.len >= 8) {
+                        /* 调用解析函数获取主/从剩余位移 */
+                        uint32_t main_rem, slave_rem;
+                        CAN_ParseRemainingDisplacement(rxMsg.data, &main_rem, &slave_rem);
+                        
+                        /* 从剩余位移为0时，执行PID补偿 */
+                        if (slave_rem == 0) {
+                            /* 读取当前角度 */
+                            float current_angle = TIM_GetAngle();
+                            
+                            /* 计算角度误差 */
+                            float angle_error = base_angle - current_angle;
+                            if (angle_error > 180.0f) {
+                                angle_error -= 360.0f;
+                            } else if (angle_error < -180.0f) {
+                                angle_error += 360.0f;
+                            }
+                            g_angle_error = angle_error;
+                            
+                            /* PID计算补偿量 */
+	                        
+                            float compensation = PID_Calculate(&pid_state, angle_error, dt);
+                            
+                            /* 左右轮差分补偿以保持直线 */
+                            /* angle_error > 0: 顺时针偏转 → 右轮减速、左轮加速 */
+                            /* angle_error < 0: 逆时针偏转 → 右轮加速、左轮减速 */
+                            if (fabsf(compensation) > 0.1f) {
+                                float half_comp = compensation / 1.0f;
+                                /* 仅调整左轮 */
+                                Car_SetSlaveDisplacement(left_dev, half_comp);
+                            }
+                        }
+                    }
                 }
-
-                /* 导出到全局，便于调试查看 */
-                g_angle_error = angle_error;
-
-                /* PID计算补偿量 */
-               float compensation = PID_Calculate(&pid_state, angle_error, dt);
-               
-               /* 左右轮差分补偿以保持直线 */
-               /* angle_error > 0: 顺时针偏转 → 右轮减速、左轮加速 */
-               /* angle_error < 0: 逆时针偏转 → 右轮加速、左轮减速 */
-                if (fabsf(compensation) > 0.1f) {  /* 补偿阈值0.05mm - 更精细的控制 */
-                   /* 补偿量的一半分配给每个轮子，方向相反 */
-                   float half_comp = compensation / 1.0f;
-                   /* 仅调整左轮 */
-                   Car_SetSlaveDisplacement(left_dev, half_comp);
-               }
+                /* 累加时间（每次循环约15ms） */
+                elapsed += 15;
             }
             
             /* 前进完成，等待稳定 */
@@ -434,9 +452,8 @@ void Car_TestTask(void const *argument)
                     target_angle += 360.0f;
                 }
                 
-                /* 初始化PID控制器 */
+                /* PID控制器（仅用P值） */
                 PID_State_t pid_state;
-                PID_Reset(&pid_state);
                 
                 /* 循环校准3秒 */
                 uint32_t elapsed = 0;

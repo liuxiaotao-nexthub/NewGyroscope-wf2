@@ -30,6 +30,34 @@ uint32_t CAN_RxStdId = 0;
 /* 私有函数原型 ---------------------------------------------------------------*/
 static void CAN_FilterConfig(void);
 
+/* 动态添加过滤器以接收单个标准ID（在运行时调用） */
+int CAN_AddFilterForId(uint16_t id)
+{
+	CAN_FilterTypeDef sFilterConfig;
+
+	/* 使用下一个可用过滤器槽（这里使用 FilterBank = 1）
+	   注意：如果 BSP/其他代码使用更多过滤器，需要管理 bank 号。 */
+	sFilterConfig.FilterBank = 1;
+	sFilterConfig.FilterMode = CAN_FILTERMODE_IDLIST;
+	sFilterConfig.FilterScale = CAN_FILTERSCALE_16BIT;
+
+	/* 将单个ID放在高16位/低16位条目之一（16位标度，需要左移5位） */
+	sFilterConfig.FilterIdHigh = (id << 5) & 0xFFFF;
+	sFilterConfig.FilterIdLow = 0;
+	sFilterConfig.FilterMaskIdHigh = (id << 5) & 0xFFFF;
+	sFilterConfig.FilterMaskIdLow = 0;
+
+	sFilterConfig.FilterFIFOAssignment = CAN_RX_FIFO0;
+	sFilterConfig.FilterActivation = ENABLE;
+	sFilterConfig.SlaveStartFilterBank = 14;
+
+	if (HAL_CAN_ConfigFilter(&hcan, &sFilterConfig) != HAL_OK)
+	{
+		return -1;
+	}
+	return 0;
+}
+
 /* 私有函数 -------------------------------------------------------------------*/
 
 /**
@@ -192,6 +220,28 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 void USB_LP_CAN1_RX0_IRQHandler(void)
 {
 	HAL_CAN_IRQHandler(&hcan);
+}
+
+/**
+  * @brief  解析剩余位移帧数据
+  * @param  data: 8字节CAN数据 (byte[0-3]=主剩余位移, byte[4-7]=从剩余位移，小端，单位0.1mm)
+  * @param  main_rem: 输出主剩余位移（单位0.1mm）
+  * @param  slave_rem: 输出从剩余位移（单位0.1mm）
+  * @retval 无
+  */
+void CAN_ParseRemainingDisplacement(const uint8_t *data, uint32_t *main_rem, uint32_t *slave_rem)
+{
+	/* 解析主剩余位移 byte[0-3]（小端） */
+	*main_rem = (uint32_t)data[0] |
+	            ((uint32_t)data[1] << 8) |
+	            ((uint32_t)data[2] << 16) |
+	            ((uint32_t)data[3] << 24);
+	
+	/* 解析从剩余位移 byte[4-7]（小端） */
+	*slave_rem = (uint32_t)data[4] |
+	             ((uint32_t)data[5] << 8) |
+	             ((uint32_t)data[6] << 16) |
+	             ((uint32_t)data[7] << 24);
 }
 
 /************************ 文件结束 ****/

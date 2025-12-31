@@ -25,6 +25,8 @@ extern uint32_t CAN_RxStdId; /* 最近接收帧的标准ID */
 /* 导出函数 -------------------------------------------------------------------*/
 void CAN_Init(void);
 void CAN_SendData(uint32_t id, uint8_t *pData, uint8_t len);
+int CAN_AddFilterForId(uint16_t id);
+void CAN_ParseRemainingDisplacement(const uint8_t *data, uint32_t *main_rem, uint32_t *slave_rem);
 
 #ifdef __cplusplus
 }

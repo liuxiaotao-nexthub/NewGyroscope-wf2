@@ -39,3 +39,6 @@ void Car_TestTask(void const *argument);
 #endif /* __CAR_TASK_H */
 
 /************************ 文件结束 ****/
+
+/* 外部可见的左轮剩余位移 CAN ID（0 表示未设置） */
+extern uint16_t left_remaining_id;

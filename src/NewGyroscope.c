@@ -144,7 +144,7 @@ int main(void)
 	TIM2_Init();
 
 	/* 创建小车 CAN 消息队列（队列深度 2） */
-	osMessageQDef(carCanQueue, 2, CarCanMsg_t);
+	osMessageQDef(carCanQueue, 1, CarCanMsg_t);
 	CarCanQueueHandle = osMessageCreate(osMessageQ(carCanQueue), NULL);
 
 	/* Create CAN send task */

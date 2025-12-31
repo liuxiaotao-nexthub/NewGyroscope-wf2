@@ -24,16 +24,13 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* PID参数（可在GDB调试时修改） */
-float g_pid_kp = 7.0f;      /* 比例系数 - 提高到8.0以增强角度校正 */
-float g_pid_ki = 0.00f;     /* 积分系数 - 启用以消除累积误差 */
-float g_pid_kd = 0.00f;      /* 微分系数（未启用） */
+float g_pid_kp = 6.7f;      /* 比例系数 - 提高到8.0以增强角度校正 */
 
 /* PID输出（调试、监控用，可在GDB中查看） */
 float g_pid_output = 0.0f;
 
 /* 内部限幅常量 */
-static const float PID_OUTPUT_LIMIT = 10.0f;    /* 输出限幅（mm） */
-static const float PID_INTEGRAL_LIMIT = 200.0f; /* 积分限幅（角度·秒） */
+static const float PID_OUTPUT_LIMIT = 20.0f;    /* 输出限幅（mm） */
 
 /* Exported functions --------------------------------------------------------*/
 
@@ -52,26 +49,12 @@ float PID_Calculate(PID_State_t *state, float error, float dt)
 {
     /* 比例项 */
     float p_term = g_pid_kp * error;
-
-    /* 积分项（抗积分饱和限幅） */
-    state->integral += error * dt;
-    if (state->integral > PID_INTEGRAL_LIMIT) state->integral = PID_INTEGRAL_LIMIT;
-    if (state->integral < -PID_INTEGRAL_LIMIT) state->integral = -PID_INTEGRAL_LIMIT;
-    float i_term = g_pid_ki * state->integral;
-
-    /* 微分项 */
-    float derivative = (error - state->prev_error) / dt;
-    float d_term = g_pid_kd * derivative;
-
     /* 合成输出 */
-    float output = p_term + i_term + d_term;
+    float output = p_term;
 
     /* 输出限幅 */
     if (output > PID_OUTPUT_LIMIT) output = PID_OUTPUT_LIMIT;
     if (output < -PID_OUTPUT_LIMIT) output = -PID_OUTPUT_LIMIT;
-
-    /* 更新状态 */
-    state->prev_error = error;
 
     /* 保存输出供调试 */
     g_pid_output = output;
