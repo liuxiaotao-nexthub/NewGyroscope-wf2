@@ -44,9 +44,9 @@ typedef enum {
 float g_linear_velocity = 1500.0f;      /* 直线运动速度 (mm/s) */
 float g_rotation_velocity = 1500.0f;     /* 旋转速度 (mm/s) */
 float g_acceleration = 1000.0f;         /* 加速度 (mm/s²) */
-float g_test_distance = 5000.0f;         /* 测试距离 (mm) */
-float g_turn_distance = 613.0f;         /* 旋转位移 (mm) - 两轮各600mm刚好180° */
-float g_target_angle = 180.0f;          /* 目标旋转角度 (度) */
+float g_test_distance = 2000.0f;         /* 测试距离 (mm) */
+float g_turn_distance = 306.5f;         /* 旋转位移 (mm) - 两轮各306.5mm刚好90° */
+float g_target_angle = 90.0f;          /* 目标旋转角度 (度) */
 
 /* 全局角度误差，便于调试/查看 */
 float g_angle_error = 0.0f;
@@ -325,7 +325,7 @@ void Car_TestTask(void const *argument)
     /* 基准角变量，直走开始时读取并在旋转阶段使用 */
     float base_angle = 0.0f;
 
-    for (; num_i < 10; num_i++)
+    for (; num_i < 20; num_i++)
     {
         /* 前进 g_test_distance - 使用角度PID控制保持直线 */
         {
@@ -354,7 +354,7 @@ void Car_TestTask(void const *argument)
             uint16_t target_id = 0x420 + (uint16_t)left_dev;  /* 剩余位移帧ID */
             
             uint32_t elapsed = 0;  /* 已运行时间(ms) */
-            const uint32_t timeout_ms = 7000;  /* 10秒超时 */
+            const uint32_t timeout_ms = 5000;  /* 10秒超时 */
             
             while (elapsed < timeout_ms) {
                 /* 从消息队列获取CAN帧（15ms超时） */
@@ -404,14 +404,14 @@ void Car_TestTask(void const *argument)
             osDelay(2000);
         }
 
-        /* 左转:使用角度判断,每2ms检查一次 */
+        /* 右转:使用角度判断,每2ms检查一次 */
         {
-            /* 旋转开始前，使用当前基准的角度作为参考，旋转目标为 current_base - g_target_angle */
+            /* 旋转开始前，使用当前基准的角度作为参考，旋转目标为 current_base + g_target_angle */
             float prev_angle = TIM_GetAngle();
             float accumulated_angle = 0.0f;
 
-            /* 发送左转命令(开始旋转) */
-            Car_TurnLeft(g_turn_distance);
+            /* 发送右转命令(开始旋转) */
+            Car_TurnRight(g_turn_distance);
 
             /* 每2ms检查一次角度变化并累加绝对值,直到达到目标角度 */
             while (1)
@@ -441,8 +441,8 @@ void Car_TestTask(void const *argument)
             {
                 uint8_t left_dev = Car_GetLeftDevID();
                 uint8_t right_dev = Car_GetRightDevID();
-                    /* 计算目标角度：使用直走时读取的 base_angle 减去旋转角度（左转），即 base_angle - 180° */
-                    float target_angle = base_angle - g_target_angle;  /* 左转为负 */
+                    /* 计算目标角度：使用直走时读取的 base_angle 加上旋转角度（右转），即 base_angle + 90° */
+                    float target_angle = base_angle + g_target_angle;  /* 右转为正 */
                 
                 /* 归一化目标角度到 ±180度范围 */
                 while (target_angle > 180.0f) {
