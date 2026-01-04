@@ -354,7 +354,8 @@ void Car_TestTask(void const *argument)
             uint16_t target_id = 0x420 + (uint16_t)left_dev;  /* 剩余位移帧ID */
             
             uint32_t elapsed = 0;  /* 已运行时间(ms) */
-            const uint32_t timeout_ms = 5000;  /* 10秒超时 */
+            const uint32_t timeout_ms = 10000;  /* 10秒超时 */
+            int main_zero_count = 0;  /* 主位移为0的连续计数 */
             
             while (elapsed < timeout_ms) {
                 /* 从消息队列获取CAN帧（15ms超时） */
@@ -393,6 +394,17 @@ void Car_TestTask(void const *argument)
                                 /* 仅调整左轮 */
                                 Car_SetSlaveDisplacement(left_dev, half_comp);
                             }
+                        }
+                        
+                        /* 主剩余位移为0时累加计数，否则清零 */
+                        if (main_rem == 0) {
+                            main_zero_count++;
+                            /* 连续3次读到主位移为0才跳出 */
+                            if (main_zero_count >= 15) {
+                                break;
+                            }
+                        } else {
+                            main_zero_count = 0;
                         }
                     }
                 }
