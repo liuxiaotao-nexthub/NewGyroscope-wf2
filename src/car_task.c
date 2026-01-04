@@ -388,7 +388,7 @@ void Car_TestTask(void const *argument)
                             /* 左右轮差分补偿以保持直线 */
                             /* angle_error > 0: 顺时针偏转 → 右轮减速、左轮加速 */
                             /* angle_error < 0: 逆时针偏转 → 右轮加速、左轮减速 */
-                            if (fabsf(compensation) > 0.1f) {
+                            if (fabsf(compensation) > 0.0f) {
                                 float half_comp = compensation / 1.0f;
                                 /* 仅调整左轮 */
                                 Car_SetSlaveDisplacement(left_dev, half_comp);
@@ -485,7 +485,7 @@ void Car_TestTask(void const *argument)
                     float compensation = PID_Calculate(&pid_state, angle_error, dt);
                     
                     /* 使用从位移进行旋转角度校正 */
-                    if (fabsf(compensation) > 0.1f) {
+                    if (fabsf(compensation) > 0.0f) {
                         /* 补偿量分配给两个轮子 */
                         float half_comp = compensation / 1.0f;
                         /* 仅调整左轮进行角度校正 */
