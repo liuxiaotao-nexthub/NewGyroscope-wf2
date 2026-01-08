@@ -621,51 +621,33 @@
     <ClCompile Include="can.c">
       <Filter>Source files</Filter>
     </ClCompile>
-    <ClCompile Include="spi.c">
-      <Filter>Source files</Filter>
-    </ClCompile>
-    <ClCompile Include="xv7001bb.c">
-      <Filter>Source files</Filter>
-    </ClCompile>
     <ClCompile Include="can_task.c">
       <Filter>Source files</Filter>
     </ClCompile>
-    <ClCompile Include="tim.c">
+    <ClCompile Include="flybox.c">
       <Filter>Source files</Filter>
     </ClCompile>
-    <ClCompile Include="car.c">
+    <ClCompile Include="motor.c">
       <Filter>Source files</Filter>
     </ClCompile>
-    <ClCompile Include="car_task.c">
-      <Filter>Source files</Filter>
-    </ClCompile>
-    <ClCompile Include="PID.c">
+    <ClCompile Include="fly_task.c">
       <Filter>Source files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="xv7001bb.h">
-      <Filter>Header files</Filter>
-    </ClInclude>
     <ClInclude Include="can.h">
-      <Filter>Header files</Filter>
-    </ClInclude>
-    <ClInclude Include="spi.h">
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="can_task.h">
       <Filter>Header files</Filter>
     </ClInclude>
-    <ClInclude Include="tim.h">
+    <ClInclude Include="flybox.h">
       <Filter>Header files</Filter>
     </ClInclude>
-    <ClInclude Include="car.h">
+    <ClInclude Include="motor.h">
       <Filter>Header files</Filter>
     </ClInclude>
-    <ClInclude Include="car_task.h">
-      <Filter>Header files</Filter>
-    </ClInclude>
-    <ClInclude Include="PID.h">
+    <ClInclude Include="fly_task.h">
       <Filter>Header files</Filter>
     </ClInclude>
   </ItemGroup>

@@ -30,13 +30,9 @@
 #include <../CMSIS_RTOS/cmsis_os.h>
 #include <math.h>
 #include <string.h>
-#include "spi.h"
 #include "can.h"
-#include "xv7001bb.h"
 #include "can_task.h"
-#include "tim.h"
-#include "car.h"
-#include "car_task.h"
+#include "fly_task.h"
 
 /* Private typedef -----------------------------------------------------------*/
 /* 小车队列消息结构 */
@@ -50,7 +46,6 @@ typedef struct {
 /* Private macro -------------------------------------------------------------*/
 /* Private variables ---------------------------------------------------------*/
 osThreadId MainTaskHandle;
-osThreadId GyroProcessTaskHandle;
 
 /* 小车 CAN 消息队列句柄 */
 osMessageQId CarCanQueueHandle = NULL;
@@ -58,7 +53,6 @@ osMessageQId CarCanQueueHandle = NULL;
 /* Private function prototypes -----------------------------------------------*/
 static void SystemClock_Config(void);
 static void Main_Task(void const *argument);
-static void Gyro_ProcessTask(void const *argument);
 
 /* Private functions ---------------------------------------------------------*/
 
@@ -131,17 +125,8 @@ int main(void)
 	GPIO_InitStructure.Pull = GPIO_NOPULL;
 	HAL_GPIO_Init(GPIOB, &GPIO_InitStructure);
 
-	/* Initialize SPI */
-	SPI_Init();
-
 	/* Initialize CAN */
 	CAN_Init();
-
-	/* Initialize XV7001BB */
-	XV7001BB_Init();
-
-	/* Initialize TIM2 for 2ms integration interrupts */
-	TIM2_Init();
 
 	/* 创建小车 CAN 消息队列（队列深度 2） */
 	osMessageQDef(carCanQueue, 1, CarCanMsg_t);
@@ -155,17 +140,9 @@ int main(void)
 	osThreadDef(CANCTRL, CAN_ControlTask, osPriorityNormal, 0, configMINIMAL_STACK_SIZE);
 	osThreadCreate(osThread(CANCTRL), NULL);
 
-	/* Create gyroscope processing task */
-	osThreadDef(GYROPROCESS, Gyro_ProcessTask, osPriorityHigh, 0, 512);
-	GyroProcessTaskHandle = osThreadCreate(osThread(GYROPROCESS), NULL);
-
-	/* Create car lock task */
-	osThreadDef(CARLOCK, Car_LockTask, osPriorityNormal, 0, 256);
-	CarLockTaskHandle = osThreadCreate(osThread(CARLOCK), NULL);
-
-	/* Create car test task (created in suspended state) */
-	osThreadDef(CARTEST, Car_TestTask, osPriorityNormal, 1, 256);
-	CarTestTaskHandle = osThreadCreate(osThread(CARTEST), NULL);
+	/* Create Motor bind task */
+	osThreadDef(MOTORBIND, Motor_BindTask, osPriorityNormal, 0, 256);
+	osThreadCreate(osThread(MOTORBIND), NULL);
 
 	/* Main task definition */
 	osThreadDef(MAIN, Main_Task, osPriorityNormal, 0, 64);
@@ -196,123 +173,7 @@ static void Main_Task(void const *argument)
     for (;;)
     {
         HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_9);
-        osDelay(100);
-    }
-}
-
-/**
-  * @brief  陀螺仪数据处理任务 - 使用环形缓冲区滑动窗口检测零漂
-  * @param  argument: 任务参数（未使用）
-  * @retval 无
-  */
-static void Gyro_ProcessTask(void const *argument)
-{
-    (void)argument;
-    osEvent evt;
-    float raw_rate;
-    
-    for (;;)
-    {
-        /* 从消息队列接收角速度数据，永久等待 */
-        evt = osMessageGet(gyroQueueHandle, osWaitForever);
-        
-        if (evt.status == osEventMessage)
-        {
-            /* 提取角速度值 */
-            raw_rate = *(float*)&evt.value.v;
-
-            /* === 环形缓冲区滑动窗口更新 === */
-            if (zerobuf_count < ZEROBUF_SIZE)
-            {
-                /* 初始填充阶段：只更新缓冲区与均值累加 */
-                zerobuf[zerobuf_idx] = raw_rate;
-                zerobuf_sum += raw_rate;
-                zerobuf_count++;
-                zerobuf_idx++;
-                if (zerobuf_idx >= ZEROBUF_SIZE) zerobuf_idx = 0;
-            }
-            else
-            {
-                /* 滑动窗口更新：移除最旧数据，加入新数据（仅维护均值相关量） */
-                float old_value = zerobuf[zerobuf_idx];
-                zerobuf_sum -= old_value;
-
-                zerobuf[zerobuf_idx] = raw_rate;
-                zerobuf_sum += raw_rate;
-
-                zerobuf_idx++;
-                if (zerobuf_idx >= ZEROBUF_SIZE) zerobuf_idx = 0;
-
-                /* 计算当前滑动窗口的均值（不再计算方差） */
-                gyro_mean = zerobuf_sum / (float)ZEROBUF_SIZE;
-
-                /* === 静止检测：仅使用均值绝对值判断是否接近零漂基线 === */
-                if (fabsf(gyro_mean) < MEAN_THRESHOLD)
-                {
-                    /* 满足静止条件，开始分段统计 */
-                    
-                    /* 累加当前样本到当前段 */
-                    segment_sum += raw_rate;
-                    samples_in_segment++;
-                    
-                    /* 当前段收集满200个样本 */
-                    if (samples_in_segment >= SEGMENT_SIZE)
-                    {
-                        /* 计算当前段的平均值 */
-                        segment_means[segment_index] = segment_sum / (float)SEGMENT_SIZE;
-                        
-                        /* 移动到下一段 */
-                        segment_index++;
-                        segment_sum = 0.0f;
-                        samples_in_segment = 0;
-                        
-                        /* 如果已经收集完3段数据（共150个样本） */
-                        if (segment_index >= STABLE_CHECK_TIMES)
-                        {
-                            /* 取中间段（第2段，索引1）的平均值更新 bias */
-                            float middle_segment_mean = segment_means[1];
-                        
-                            /* 使用 EMA 滤波平滑更新 bias */
-                            if (!bias_initialized)
-                            {
-                                /* 首次初始化，直接使用测量值 */
-                                bias = middle_segment_mean;
-                                bias_initialized = 1;
-                            }
-                            else
-                            {
-                                /* 已初始化，使用 EMA 滤波 */
-                                bias = BIAS_EMA_ALPHA * middle_segment_mean + (1.0f - BIAS_EMA_ALPHA) * bias;
-                            }
-                            
-                            /* 重置分段统计，准备下一轮检测 */
-                            segment_index = 0;
-                            segment_sum = 0.0f;
-                            samples_in_segment = 0;
-                        }
-                    }
-                }
-                else
-                {
-                    /* 不满足静止条件，重置分段统计（如果使用） */
-                    segment_index = 0;
-                    segment_sum = 0.0f;
-                    samples_in_segment = 0;
-                }
-            }
-
-            /* --- 去零漂后进行梯形积分 --- */
-            float corrected = raw_rate - bias;
-            float dt = 0.002f;
-            integrator.angle += (integrator.prev_rate + corrected) * 0.5f * dt;
-            integrator.prev_rate = corrected;
-	        
-	        /* 角度归一化到 [-180°, 180°] 防止溢出 */
-	        integrator.angle = fmodf(integrator.angle + 180.0f, 360.0f) - 180.0f;
-	        if (integrator.angle < -180.0f) {
-		        integrator.angle += 360.0f;
-	        }
-        }
+        osDelay(500);
     }
 }
 

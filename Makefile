@@ -60,14 +60,11 @@ LDFLAGS = $(MCU) \
 USER_SOURCES = \
 	src/can.c \
 	src/can_task.c \
-	src/car.c \
-	src/car_task.c \
+	src/fly_task.c \
+	src/flybox.c \
+	src/motor.c \
 	src/NewGyroscope.c \
-	src/PID.c \
-	src/spi.c \
-	src/system_stm32f1xx.c \
-	src/tim.c \
-	src/xv7001bb.c
+	src/system_stm32f1xx.c
 
 # BSP源文件
 BSP_SOURCES = \
