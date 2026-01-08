@@ -397,10 +397,10 @@ void Car_TestTask(void const *argument)
                         }
                         
                         /* 主剩余位移为0时累加计数，否则清零 */
-                        if (main_rem == 0) {
+                        if (main_rem == 0) { 
                             main_zero_count++;
                             /* 连续3次读到主位移为0才跳出 */
-                            if (main_zero_count >= 15) {
+                            if (main_zero_count >= 60) {
                                 break;
                             }
                         } else {
@@ -413,7 +413,7 @@ void Car_TestTask(void const *argument)
             }
             
             /* 前进完成，等待稳定 */
-            osDelay(2000);
+            osDelay(1500);
         }
 
         /* 右转:使用角度判断,每2ms检查一次 */
@@ -449,12 +449,12 @@ void Car_TestTask(void const *argument)
                 }
             }
 	        osDelay(1000);
-            /* 旋转完成后的角度校准 - 使用PID补偿旋转误差 */
+            /* 旋转完成后的角度校准 - 使用消息队列接收剩余位移，从位移为0时执行PID补偿 */
             {
                 uint8_t left_dev = Car_GetLeftDevID();
                 uint8_t right_dev = Car_GetRightDevID();
-                    /* 计算目标角度：使用直走时读取的 base_angle 加上旋转角度（右转），即 base_angle + 90° */
-                    float target_angle = base_angle + g_target_angle;  /* 右转为正 */
+                /* 计算目标角度：使用直走时读取的 base_angle 加上旋转角度（右转），即 base_angle + 90° */
+                float target_angle = base_angle + g_target_angle;  /* 右转为正 */
                 
                 /* 归一化目标角度到 ±180度范围 */
                 while (target_angle > 180.0f) {
@@ -467,44 +467,64 @@ void Car_TestTask(void const *argument)
                 /* PID控制器（仅用P值） */
                 PID_State_t pid_state;
                 
-                /* 循环校准3秒 */
-                uint32_t elapsed = 0;
-                const uint32_t calibration_time = 2000;  /* 3秒校准时间 */
-                const float dt = 0.05f;  /* 50ms = 0.05秒 */
-                int slave_cleared = 0;
+                const float dt = 0.015f;  /* 15ms = 0.015秒 */
+                uint16_t target_id = 0x420 + (uint16_t)left_dev;  /* 剩余位移帧ID */
                 
-                while (elapsed < calibration_time) {
-                    osDelay(50);
-                    elapsed += 50;
-                    
-                    /* 读取当前角度 */
-                    float current_angle = TIM_GetAngle();
-                    
-                    /* 计算角度误差（目标角度 - 实际角度） */
-                    float angle_error = target_angle - current_angle;
-                    
-                    /* 处理角度跨越±180度的情况 */
-                    if (angle_error > 180.0f) {
-                        angle_error -= 360.0f;
-                    } else if (angle_error < -180.0f) {
-                        angle_error += 360.0f;
+                uint32_t elapsed = 0;  /* 已运行时间(ms) */
+                const uint32_t timeout_ms = 1000;  /* 1秒超时 */
+                int main_zero_count = 0;  /* 主位移为0的连续计数 */
+                
+                while (elapsed < timeout_ms) {
+                    /* 从消息队列获取CAN帧（15ms超时） */
+                    CarCanMsg_t rxMsg;
+                    if (xQueueReceive(CarCanQueueHandle, &rxMsg, pdMS_TO_TICKS(15)) == pdTRUE) {
+                        
+                        /* 检查是否为目标剩余位移帧 */
+                        if (rxMsg.id == target_id && rxMsg.len >= 8) {
+                            /* 调用解析函数获取主/从剩余位移 */
+                            uint32_t main_rem, slave_rem;
+                            CAN_ParseRemainingDisplacement(rxMsg.data, &main_rem, &slave_rem);
+                            
+                            /* 从剩余位移为0时，执行PID补偿 */
+                            if (slave_rem == 0) {
+                                /* 读取当前角度 */
+                                float current_angle = TIM_GetAngle();
+                                
+                                /* 计算角度误差（目标角度 - 实际角度） */
+                                float angle_error = target_angle - current_angle;
+                                if (angle_error > 180.0f) {
+                                    angle_error -= 360.0f;
+                                } else if (angle_error < -180.0f) {
+                                    angle_error += 360.0f;
+                                }
+                                g_angle_error = angle_error;
+                                
+                                /* PID计算补偿量 */
+                                float compensation = PID_Calculate(&pid_state, angle_error, dt);
+                                
+                                /* 使用从位移进行旋转角度校正 */
+                                if (fabsf(compensation) > 0.0f) {
+                                    float half_comp = compensation / 1.0f;
+                                    /* 仅调整左轮进行角度校正 */
+                                    Car_SetSlaveDisplacement(left_dev, half_comp);
+                                }
+                            }
+                            
+                            /* 主剩余位移为0时累加计数，否则清零 */
+                            if (main_rem == 0) {
+                                main_zero_count++;
+                                /* 连续15次读到主位移为0才跳出 */
+                                if (main_zero_count >= 15) {
+                                    break;
+                                }
+                            } else {
+                                main_zero_count = 0;
+                            }
+                        }
                     }
-                    
-                    /* 导出到全局，便于调试查看 */
-                    g_angle_error = angle_error;
-                    
-                    /* PID计算补偿量 */
-                    float compensation = PID_Calculate(&pid_state, angle_error, dt);
-                    
-                    /* 使用从位移进行旋转角度校正 */
-                    if (fabsf(compensation) > 0.0f) {
-                        /* 补偿量分配给两个轮子 */
-                        float half_comp = compensation / 1.0f;
-                        /* 仅调整左轮进行角度校正 */
-                        Car_SetSlaveDisplacement(left_dev, half_comp);
-                    }
+                    /* 累加时间（每次循环约15ms） */
+                    elapsed += 15;
                 }
-                /* 无需切换基准：每次直走阶段会重新读取基准 */
             }
         }
 
