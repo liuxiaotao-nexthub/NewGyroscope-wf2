@@ -144,6 +144,10 @@ int main(void)
 	osThreadDef(MOTORBIND, Motor_BindTask, osPriorityNormal, 0, 256);
 	osThreadCreate(osThread(MOTORBIND), NULL);
 
+	/* Create FlyBox test task */
+	osThreadDef(FLYTEST, FlyBox_TestTask, osPriorityNormal, 0, 128);
+	g_testTaskHandle = osThreadCreate(osThread(FLYTEST), NULL);
+
 	/* Main task definition */
 	osThreadDef(MAIN, Main_Task, osPriorityNormal, 0, 64);
 	MainTaskHandle = osThreadCreate(osThread(MAIN), NULL);

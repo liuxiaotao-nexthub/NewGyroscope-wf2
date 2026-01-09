@@ -49,6 +49,61 @@ typedef struct {
 /* 所有飞箱配置表 */
 extern const FlyBoxConfig_t g_flybox_configs[FLYBOX_COUNT];
 
+/* ========== 飞箱功能接口声明 ========== */
+
+/**
+  * @brief  控制左右履带同步移动（前进/后退）
+  * @param  distance_mm: 位移距离（单位：mm，正数前进，负数后退）
+  * @retval None
+  */
+void FlyBox_TrackMove(float distance_mm);
+
+/**
+  * @brief  控制左履带单独移动
+  * @param  distance_mm: 位移距离（单位：mm，正数前进，负数后退）
+  * @retval None
+  */
+void FlyBox_LeftTrackMove(float distance_mm);
+
+/**
+  * @brief  控制右履带单独移动
+  * @param  distance_mm: 位移距离（单位：mm，正数前进，负数后退）
+  * @retval None
+  */
+void FlyBox_RightTrackMove(float distance_mm);
+
+/**
+  * @brief  控制底带位移
+  * @param  distance_mm: 位移距离（单位：mm，正数前进，负数后退）
+  * @retval None
+  */
+void FlyBox_BeltMove(float distance_mm);
+
+/**
+  * @brief  控制转盘旋转
+  * @param  angle_deg: 旋转角度（单位：度，正数顺时针，负数逆时针）
+  * @retval None
+  */
+void FlyBox_TurntableRotate(float angle_deg);
+
+/**
+  * @brief  控制抓钩抓取
+  * @retval None
+  */
+void FlyBox_HookGrab(void);
+
+/**
+  * @brief  控制抓钩放下
+  * @retval None
+  */
+void FlyBox_HookRelease(void);
+
+/**
+  * @brief  停止所有电机
+  * @retval None
+  */
+void FlyBox_StopAll(void);
+
 #ifdef __cplusplus
 }
 #endif
