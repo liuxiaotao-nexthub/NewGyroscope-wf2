@@ -30,19 +30,19 @@ uint8_t g_current_flybox_id = 0;
 osThreadId g_testTaskHandle = NULL;
 
 /* 电机运动参数配置 */
-#define MOTOR_WHEEL_DIAMETER    500      /* 轮径 50mm */
+#define MOTOR_WHEEL_DIAMETER    50       /* 轮径 50mm */
 
 /* 各电机加速度配置 */
-#define ACCELERATION_TRACK      30000    /* 履带加速度 10000mm/s² */
-#define ACCELERATION_BELT       50000    /* 底带加速度 60000mm/s² */
-#define ACCELERATION_TURNTABLE  50000    /* 转盘加速度 60000mm/s² */
-#define ACCELERATION_HOOK       50000    /* 抓钩加速度 60000mm/s² */
+#define ACCELERATION_TRACK      1000     /* 履带加速度 1000mm/s² */
+#define ACCELERATION_BELT       6000     /* 底带加速度 6000mm/s² */
+#define ACCELERATION_TURNTABLE  6000     /* 转盘加速度 6000mm/s² */
+#define ACCELERATION_HOOK       6000     /* 抓钩加速度 6000mm/s² */
 
 /* 各电机速度配置 */
-#define VELOCITY_TRACK          5000     /* 履带速度 5000mm/s */
-#define VELOCITY_BELT           30000    /* 底带速度 30000mm/s */
-#define VELOCITY_TURNTABLE      20000    /* 转盘速度 10000mm/s */
-#define VELOCITY_HOOK           10000    /* 抓钩速度 10000mm/s */
+#define VELOCITY_TRACK          500      /* 履带速度 500mm/s */
+#define VELOCITY_BELT           2425     /* 底带速度 2425mm/s */
+#define VELOCITY_TURNTABLE      2000     /* 转盘速度 2000mm/s */
+#define VELOCITY_HOOK           1000     /* 抓钩速度 1000mm/s */
 
 /* 各电机速度数组（按MotorIndex_t顺序） */
 static const uint32_t g_motor_velocities[MOTOR_COUNT] = {
@@ -180,13 +180,13 @@ void FlyBox_TestTask(void const *argument)
         osDelay(1000);                   /* 等待抓取完成 */
         
         /* ===== 步骤3: 底带后退一点，让箱子部分上履带 ===== */
-        FlyBox_BeltMove(-100.0f);        /* 底带后退10cm */
-        osDelay(1000);                   /* 等待动作完成 */
+        FlyBox_BeltMove(-200.0f);        /* 底带后退20cm */
+        osDelay(1500);                   /* 等待动作完成 */
         
         /* ===== 步骤4: 履带和底带同步后退，传送箱子 ===== */
-        FlyBox_BeltMove(-450.0f);        /* 底带后退45cm */
+        FlyBox_BeltMove(-350.0f);        /* 底带后退35cm */
         osDelay(1);
-        FlyBox_TrackMove(-450.0f);       /* 履带后退45cm */
+        FlyBox_TrackMove(-350.0f);       /* 履带后退35cm */
         osDelay(3000);                   /* 等待动作完成 */
         
         /* ===== 步骤5: 抓钩放下+转盘复位 ===== */
@@ -196,7 +196,7 @@ void FlyBox_TestTask(void const *argument)
         osDelay(2000);                   /* 等待动作完成 */
         
         /* ===== 步骤6: 履带后退，让箱子完全上来 ===== */
-        FlyBox_TrackMove(-100.0f);       /* 履带后退10cm */
+        FlyBox_TrackMove(-150.0f);       /* 履带后退15cm */
         osDelay(2000);                   /* 等待动作完成 */
         
         /* 拉上完成，等待一段时间 */
@@ -207,7 +207,7 @@ void FlyBox_TestTask(void const *argument)
         /* ============================================== */
         
         /* ===== 步骤1: 履带前进，准备送出箱子 ===== */
-        FlyBox_TrackMove(100.0f);        /* 履带前进10cm */
+        FlyBox_TrackMove(150.0f);        /* 履带前进15cm */
         osDelay(2000);                   /* 等待动作完成 */
         
         /* ===== 步骤2: 转盘旋转，转完后抓钩抓取 ===== */
@@ -217,14 +217,14 @@ void FlyBox_TestTask(void const *argument)
         osDelay(1000);                   /* 等待抓取完成 */
         
         /* ===== 步骤3: 履带和底带同步前进，传送箱子 ===== */
-        FlyBox_BeltMove(450.0f);         /* 底带前进45cm */
+        FlyBox_BeltMove(350.0f);         /* 底带前进35cm */
         osDelay(1);
-        FlyBox_TrackMove(450.0f);        /* 履带前进45cm */
+        FlyBox_TrackMove(350.0f);        /* 履带前进35cm */
         osDelay(3000);                   /* 等待动作完成 */
         
         /* ===== 步骤4: 底带单独前进，箱子到位 ===== */
-        FlyBox_BeltMove(100.0f);         /* 底带前进10cm */
-        osDelay(1000);                   /* 等待动作完成 */
+        FlyBox_BeltMove(200.0f);         /* 底带前进20cm */
+        osDelay(1500);                   /* 等待动作完成 */
         
         /* ===== 步骤5: 抓钩放下+转盘复位+底带前进 ===== */
         FlyBox_HookRelease();            /* 抓钩放下 */
