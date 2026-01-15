@@ -49,6 +49,9 @@ typedef struct {
 /* 所有飞箱配置表 */
 extern const FlyBoxConfig_t g_flybox_configs[FLYBOX_COUNT];
 
+/* 全局记录底带当前位置（单位：cm），默认 30 cm */
+extern float g_belt_position_mm;
+
 /* ========== 飞箱功能接口声明 ========== */
 
 /**
@@ -98,11 +101,33 @@ void FlyBox_HookGrab(void);
   */
 void FlyBox_HookRelease(void);
 
+/* 将底带回到默认位置（单位：mm，默认 300 mm） */
+void FlyBox_BeltHome(void);
+
 /**
   * @brief  停止所有电机
   * @retval None
   */
 void FlyBox_StopAll(void);
+
+/**
+  * @brief  发送 TOF 测距模块查询命令（ID 0x408）
+  * @param  dev_id: TOF 设备号（例如 0x19 或 0x1A）
+  * @retval None
+  * @note   发送数据: [dev_id, 0x0C,0,0,0,0,0,0]
+  */
+void FlyBox_RequestTOF(uint8_t dev_id);
+
+/**
+  * @brief  解析 TOF 模块返回的 CAN 帧（ID 0x409）
+  * @param  data: 指向 CAN 数据区指针
+  * @param  len: 数据长度（应>=4）
+  * @param  dev_id: 输出设备号（可为NULL）
+  * @param  dist_01mm: 输出距离，单位 0.1mm（可为NULL）
+  * @param  type: 输出数据类型（0x00 旧数据，0x01 新数据）（可为NULL）
+  * @retval int: 0 表示解析成功，-1 表示数据无效
+  */
+int FlyBox_ParseTOF(const uint8_t *data, uint8_t len, uint8_t *dev_id, float *dist_mm, uint8_t *type);
 
 #ifdef __cplusplus
 }

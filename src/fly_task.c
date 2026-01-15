@@ -11,6 +11,7 @@
 #include "can.h"
 #include <../CMSIS_RTOS/cmsis_os.h>
 #include "queue.h"
+#include <math.h>
 #include <string.h>
 
 /* 外部变量（CAN队列句柄，在 NewGyroscope.c 中定义） */
@@ -140,6 +141,33 @@ void Motor_BindTask(void const *argument)
         osDelay(5);
     }
     
+    /* ===== 为 TOF 测距模块 发送配置 ===== */
+    {
+        uint8_t tof_ids[2] = {0x19, 0x1A};
+        uint8_t tof_buf[8] = {0x11, 0x22, 0x00, 0xFF, 0x00, 0x05, 0x00, 0x00};
+
+        for (int t = 0; t < 2; t++) {
+            tof_buf[7] = tof_ids[t];
+            for (int k = 0; k < 3; k++) {
+                CAN_SendData(0x316, tof_buf, 8);
+                osDelay(1);
+            }
+        }
+        /* 配置完 0x316 后，启动 0x19/0x1A 的连续测量（CAN ID 0x0408） */
+        {
+            uint8_t start1[8] = {0x19, 0x0A, 0x01, 0x11, 0x22, 0x00, 0x00, 0x00};
+            uint8_t start2[8] = {0x1A, 0x0A, 0x01, 0x11, 0x22, 0x00, 0x00, 0x00};
+            for (int k = 0; k < 3; k++) {
+                CAN_SendData(0x0408, start1, 8);
+                osDelay(1);
+            }
+            for (int k = 0; k < 3; k++) {
+                CAN_SendData(0x0408, start2, 8);
+                osDelay(1);
+            }
+        }
+    }
+    
     /* 绑定完成，恢复测试任务 */
     if (g_testTaskHandle != NULL)
     {
@@ -159,10 +187,13 @@ void Motor_BindTask(void const *argument)
 void FlyBox_TestTask(void const *argument)
 {
     (void)argument;
+    CarCanMsg_t carMsg;
     
     /* 任务开始时先挂起，等待绑定任务恢复 */
     vTaskSuspend(NULL);
     
+    float last_belt_move_mm = 0.0f;
+
     for (;;)
     {
         /* ============================================== */
@@ -170,69 +201,385 @@ void FlyBox_TestTask(void const *argument)
         /* ============================================== */
         
         /* ===== 步骤1: 转盘旋转+底带前进，准备抓取 ===== */
-        FlyBox_TurntableRotate(90.0f);   /* 转盘顺时针90° */
-        osDelay(1);
-        FlyBox_BeltMove(550.0f);         /* 底带前进55cm */
-        osDelay(3000);                   /* 等待动作完成 */
+        FlyBox_TurntableRotate(-90.0f);   /* 转盘逆时针90° */
+        osDelay(1500);                   /* 等待转盘稳定，增加 TOF 响应时间 */
+
+        /* 使用 TOF 读取距离并移动到底带停在 (x - 90mm)
+           每次循环发送请求，若未收到回复则再次询问（最多等待约2秒） */
+        {
+            const uint8_t tof_dev = 0x19; /* 使用 TOF 设备号 0x19（可改为 0x1A） */
+            float dist_mm = 0.0f;
+            uint8_t resp_dev = 0;
+            uint8_t resp_type = 0;
+            int parsed = 0;
+
+            /* 循环发送请求并等待短时响应 */
+            for (int wait = 0; wait < 20; wait++) {
+                /* 每次循环重新发送请求，如果设备没有回复就再次询问 */
+                FlyBox_RequestTOF(tof_dev);
+
+                if (xQueueReceive(CarCanQueueHandle, &carMsg, pdMS_TO_TICKS(100)) == pdTRUE) {
+                    if (carMsg.id == 0x409 && carMsg.len >= 4 && carMsg.data[0] == tof_dev) {
+                        if (FlyBox_ParseTOF(carMsg.data, carMsg.len, &resp_dev, &dist_mm, &resp_type) == 0) {
+                            parsed = 1;
+                            break;
+                        }
+                    }
+                }
+                /* 若未收到，继续下一轮（再次发送请求） */
+            }
+
+            if (parsed && dist_mm > 0.0f) {
+                /* 目标位置为 x -80mm（8cm），若负则不移动 */
+                float move_mm = dist_mm - 80.0f;
+                if (move_mm > 0.0f) {
+                    /* 限制最大前进为 550mm（55cm）以避免碰撞 */
+                    if (move_mm > 550.0f) move_mm = 550.0f;
+                    FlyBox_BeltMove(move_mm);
+                    /* 记录底带实际前进量，供抓取后回退使用 */
+                    last_belt_move_mm = move_mm;
+
+                    /* 继续查询 TOF，直到距离稳定：连续 5 次变化 < 5mm（0.5cm）视为稳定 */
+                    float prev_dist = dist_mm;
+                    int stable_count = 0;
+                    for (int iter = 0; iter < 100; iter++) { /* 最多等待约10秒 */
+                        FlyBox_RequestTOF(tof_dev);
+                        float new_dist = prev_dist;
+                        if (xQueueReceive(CarCanQueueHandle, &carMsg, pdMS_TO_TICKS(50)) == pdTRUE) {
+                            if (carMsg.id == 0x409 && carMsg.len >= 4 && carMsg.data[0] == tof_dev) {
+                                uint8_t tmp_dev, tmp_type;
+                                if (FlyBox_ParseTOF(carMsg.data, carMsg.len, &tmp_dev, &new_dist, &tmp_type) == 0) {
+                                    /* parsed new_dist */
+                                } else {
+                                    continue; /* parse failed, retry */
+                                }
+                            } else {
+                                continue; /* not the TOF response we want */
+                            }
+                        } else {
+                            continue; /* no message, retry */
+                        }
+
+                        /* 判断变化是否小于阈值 (5 mm) */
+                        if (fabsf(new_dist - prev_dist) < 5.0f) {
+                            stable_count++;
+                        } else {
+                            stable_count = 0;
+                        }
+                        prev_dist = new_dist;
+
+                        if (stable_count >= 10) {
+                            break; /* 稳定，继续后续步骤 */
+                        }
+                        osDelay(25); /* 等待一段时间再查询 */
+                    }
+                }
+            }
+        }
         
         /* ===== 步骤2: 抓钩抓取 ===== */
         FlyBox_HookGrab();               /* 抓钩抓取 */
-        osDelay(1000);                   /* 等待抓取完成 */
+        osDelay(800);                   /* 等待抓取完成 */
         
-        /* ===== 步骤3: 底带后退一点，让箱子部分上履带 ===== */
-        FlyBox_BeltMove(-200.0f);        /* 底带后退20cm */
-        osDelay(1500);                   /* 等待动作完成 */
-        
-        /* ===== 步骤4: 履带和底带同步后退，传送箱子 ===== */
-        FlyBox_BeltMove(-350.0f);        /* 底带后退35cm */
-        osDelay(1);
-        FlyBox_TrackMove(-350.0f);       /* 履带后退35cm */
-        osDelay(3000);                   /* 等待动作完成 */
+        /* ===== 步骤3/4: 抓取后，按当前底带位置退回到位置 0cm，并让履带做相同位移 ===== */
+        {
+            /* 计算需要后退的距离（mm）使底带位置变为 0：全局以 mm 存储 */
+            float retreat_mm = g_belt_position_mm; /* mm */
+            if (retreat_mm > 0.0f) {
+                /* 发送后退指令 */
+                FlyBox_BeltMove(-retreat_mm);
+                FlyBox_TrackMove(-retreat_mm);
+
+                /* 等待并检测底带电机位移的稳定状态：通过请求电机位移并解析，
+                   若连续 5 次读数变化在 2mm 以内则认为静止 */
+                const int stable_needed = 5;
+                int stable_count = 0;
+                float last_pos = 0.0f;
+                int has_last = 0;
+
+                for (int attempt = 0; attempt < 200; attempt++) { /* 上限迭代，避免死循环 */
+                    /* 请求电机返回位置 */
+                    Motor_RequestPosition(DEV_BOTTOM_BELT);
+
+                    if (xQueueReceive(CarCanQueueHandle, &carMsg, pdMS_TO_TICKS(50)) == pdTRUE) {
+                        if (carMsg.id == 0x409 && carMsg.len >= 6) {
+                            uint8_t resp_dev = 0;
+                            float pos_mm = Motor_ParsePosition(carMsg.data, &resp_dev);
+                            if (resp_dev == DEV_BOTTOM_BELT) {
+                                if (!has_last) {
+                                    last_pos = pos_mm;
+                                    has_last = 1;
+                                    stable_count = 1;
+                                } else {
+                                    if (fabsf(pos_mm - last_pos) <= 2.0f) {
+                                        stable_count++;
+                                    } else {
+                                        stable_count = 1;
+                                        last_pos = pos_mm;
+                                    }
+                                }
+
+                                if (stable_count >= stable_needed) {
+                                    break; /* 稳定，后退完成 */
+                                }
+                            }
+                        }
+                    }
+
+                    osDelay(25);
+                }
+
+                /* 全局位置由其他发送位移的代码维护，此处不再修改 g_belt_position_mm */
+            }
+        }
         
         /* ===== 步骤5: 抓钩放下+转盘复位 ===== */
         FlyBox_HookRelease();            /* 抓钩放下 */
-        osDelay(1000);
-        FlyBox_TurntableRotate(-90.0f);  /* 转盘逆时针90° */
-        osDelay(2000);                   /* 等待动作完成 */
+        osDelay(800);
+        FlyBox_TurntableRotate(90.0f);  /* 转盘逆时针90° */
+        osDelay(1000);                   /* 等待动作完成 */
         
-        /* ===== 步骤6: 履带后退，让箱子完全上来 ===== */
-        FlyBox_TrackMove(-150.0f);       /* 履带后退15cm */
-        osDelay(2000);                   /* 等待动作完成 */
+        /* ===== 步骤6: 使用 TOF(0x1A) 驱动履带后退，直到箱子距离 < 8.5cm =====
+           流程：
+           1) 请求 TOF(0x1A) 得到当前距离 x (mm)
+           2) 计算目标位置 x-80mm，向后移动履带使箱子靠近（如果需要）
+           3) 等待履带电机稳定：连续 5 次读数变化在 2mm 内
+           4) 读取 TOF，若距离 < 85mm 则退出，否则重复整个流程（while 循环）
+        */
+        {
+            const uint8_t tof_dev = 0x1A;
+            CarCanMsg_t resp;
+
+            for (;;) {
+                /* 1) 请求 TOF 并解析 */
+                float dist_mm = 0.0f;
+                uint8_t rdev = 0, rtype = 0;
+                int parsed = 0;
+
+                for (int i = 0; i < 20; i++) {
+                    FlyBox_RequestTOF(tof_dev);
+                    if (xQueueReceive(CarCanQueueHandle, &resp, pdMS_TO_TICKS(100)) == pdTRUE) {
+                        if (resp.id == 0x409 && resp.len >= 5 && resp.data[0] == tof_dev) {
+                            if (FlyBox_ParseTOF(resp.data, resp.len, &rdev, &dist_mm, &rtype) == 0) {
+                                parsed = 1;
+                                break;
+                            }
+                        }
+                    }
+                    osDelay(20);
+                }
+
+                if (!parsed) {
+                    /* 未成功读取 TOF，短等待后重试 */
+                    osDelay(100);
+                    continue;
+                }
+
+                /* 2) 计算目标并移动，目标为 65mm（6.5cm）：正为前进，负为后退 */
+                float move_mm = 65.0f - dist_mm;
+                FlyBox_TrackMove(move_mm);
+
+                /* 3) 等待履带电机稳定：连续 5 次读数变化在 2mm 内 */
+                const int stable_needed = 5;
+                int stable_count = 0;
+                float last_pos = 0.0f;
+                int has_last = 0;
+
+                for (int attempt = 0; attempt < 200; attempt++) {
+                    Motor_RequestPosition(DEV_LEFT_TRACK);
+                    if (xQueueReceive(CarCanQueueHandle, &resp, pdMS_TO_TICKS(150)) == pdTRUE) {
+                        if (resp.id == 0x409 && resp.len >= 6 && resp.data[0] == DEV_LEFT_TRACK) {
+                            uint8_t rdev2 = 0;
+                            float pos_mm = Motor_ParsePosition(resp.data, &rdev2);
+                            if (!has_last) {
+                                last_pos = pos_mm;
+                                has_last = 1;
+                                stable_count = 1;
+                            } else {
+                                if (fabsf(pos_mm - last_pos) <= 2.0f) {
+                                    stable_count++;
+                                } else {
+                                    stable_count = 1;
+                                    last_pos = pos_mm;
+                                }
+                            }
+
+                            if (stable_count >= stable_needed) {
+                                break; /* 履带稳定 */
+                            }
+                        }
+                    }
+                    osDelay(25);
+                }
+
+                /* 4) 读取 TOF 确认距离（读到数据就退出，由外层判断是否满足条件） */
+                float current_dist = dist_mm;
+                for (int j = 0; j < 20; j++) {
+                    FlyBox_RequestTOF(tof_dev);
+                    if (xQueueReceive(CarCanQueueHandle, &resp, pdMS_TO_TICKS(100)) == pdTRUE) {
+                        if (resp.id == 0x409 && resp.len >= 5 && resp.data[0] == tof_dev) {
+                            uint8_t tmpd = 0, tmpt = 0;
+                            if (FlyBox_ParseTOF(resp.data, resp.len, &tmpd, &current_dist, &tmpt) == 0) {
+                                break; /* 读到数据就退出 */
+                            }
+                        }
+                    }
+                    osDelay(20);
+                }
+
+                /* 如果当前距离在 60~70mm（6~7cm）范围内，跳出循环，继续后续步骤 */
+                if (current_dist >= 60.0f && current_dist < 70.0f) break;
+                /* 否则继续循环重新计算移动 */
+            }
+        }
         
         /* 拉上完成，等待一段时间 */
         osDelay(3000);
+
+        /* 重置记录，准备下一个周期 */
+        last_belt_move_mm = 0.0f;
         
         /* ============================================== */
         /* ========== 放下箱子流程（反向操作） ========== */
         /* ============================================== */
         
-        /* ===== 步骤1: 履带前进，准备送出箱子 ===== */
-        FlyBox_TrackMove(150.0f);        /* 履带前进15cm */
-        osDelay(2000);                   /* 等待动作完成 */
+        /* ===== 步骤1: 使用 TOF(0x1A) 驱动履带前进，准备送出箱子（循环直到 TOF 在 23~24cm 范围内） ===== */
+        {
+            const uint8_t tof_dev = 0x1A;
+            CarCanMsg_t resp;
+
+            for (;;) {
+                /* 请求并读取 TOF 值 */
+                float dist_mm = 0.0f;
+                uint8_t rdev = 0, rtype = 0;
+                int parsed = 0;
+
+                for (int i = 0; i < 20; i++) {
+                    FlyBox_RequestTOF(tof_dev);
+                    if (xQueueReceive(CarCanQueueHandle, &resp, pdMS_TO_TICKS(100)) == pdTRUE) {
+                        if (resp.id == 0x409 && resp.len >= 5 && resp.data[0] == tof_dev) {
+                            if (FlyBox_ParseTOF(resp.data, resp.len, &rdev, &dist_mm, &rtype) == 0) {
+                                parsed = 1;
+                                break;
+                            }
+                        }
+                    }
+                    osDelay(20);
+                }
+
+                if (!parsed) { osDelay(100); continue; }
+
+                /* 计算目标并移动，目标为 200mm（20cm）：正为前进，负为后退 */
+                float move_mm = 200.0f - dist_mm;
+                FlyBox_TrackMove(move_mm);
+
+                /* 等待履带稳定（连续5次变化<=2mm） */
+                const int stable_needed = 5;
+                int stable_count = 0;
+                float last_pos = 0.0f;
+                int has_last = 0;
+
+                for (int attempt = 0; attempt < 200; attempt++) {
+                    Motor_RequestPosition(DEV_LEFT_TRACK);
+                    if (xQueueReceive(CarCanQueueHandle, &resp, pdMS_TO_TICKS(150)) == pdTRUE) {
+                        if (resp.id == 0x409 && resp.len >= 6 && resp.data[0] == DEV_LEFT_TRACK) {
+                            uint8_t rdev2 = 0;
+                            float pos_mm = Motor_ParsePosition(resp.data, &rdev2);
+                            if (!has_last) {
+                                last_pos = pos_mm;
+                                has_last = 1;
+                                stable_count = 1;
+                            } else {
+                                if (fabsf(pos_mm - last_pos) <= 2.0f) {
+                                    stable_count++;
+                                } else {
+                                    stable_count = 1;
+                                    last_pos = pos_mm;
+                                }
+                            }
+
+                            if (stable_count >= stable_needed) break; /* 履带稳定 */
+                        }
+                    }
+                    osDelay(25);
+                }
+
+                /* 读取 TOF 确认是否 < 85mm，否则继续循环 */
+                float current_dist = dist_mm;
+                for (int j = 0; j < 100; j++) {
+                    FlyBox_RequestTOF(tof_dev);
+                    if (xQueueReceive(CarCanQueueHandle, &resp, pdMS_TO_TICKS(100)) == pdTRUE) {
+                        if (resp.id == 0x409 && resp.len >= 5 && resp.data[0] == tof_dev) {
+                            uint8_t tmpd = 0, tmpt = 0;
+                            if (FlyBox_ParseTOF(resp.data, resp.len, &tmpd, &current_dist, &tmpt) == 0) {
+                                break; /* 读到数据就退出 */
+                            }
+                        }
+                    }
+                    osDelay(50);
+                }
+
+                if (current_dist >= 200.0f && current_dist < 210.0f) break; /* 距离在 20~21cm 范围内，退出循环 */
+                /* 否则继续下一轮读取/移动 */
+            }
+        }
         
         /* ===== 步骤2: 转盘旋转，转完后抓钩抓取 ===== */
-        FlyBox_TurntableRotate(90.0f);   /* 转盘顺时针90° */
-        osDelay(2000);                   /* 等待转盘转完 */
+        FlyBox_TurntableRotate(-90.0f);   /* 转盘顺时针90° */
+        osDelay(1000);                   /* 等待转盘转完 */
         FlyBox_HookGrab();               /* 抓钩抓取 */
-        osDelay(1000);                   /* 等待抓取完成 */
+        osDelay(800);                   /* 等待抓取完成 */
         
         /* ===== 步骤3: 履带和底带同步前进，传送箱子 ===== */
-        FlyBox_BeltMove(350.0f);         /* 底带前进35cm */
+        FlyBox_BeltMove(550.0f);         /* 底带前进55cm */
         osDelay(1);
-        FlyBox_TrackMove(350.0f);        /* 履带前进35cm */
-        osDelay(3000);                   /* 等待动作完成 */
-        
-        /* ===== 步骤4: 底带单独前进，箱子到位 ===== */
-        FlyBox_BeltMove(200.0f);         /* 底带前进20cm */
-        osDelay(1500);                   /* 等待动作完成 */
+        FlyBox_TrackMove(550.0f);        /* 履带前进55cm */
+        osDelay(1);
+
+        /* 等待底带电机稳定：连续5次读数变化<=2mm视为移动完成 */
+        {
+            const int stable_needed = 5;
+            int stable_count = 0;
+            float last_pos = 0.0f;
+            int has_last = 0;
+
+            for (int attempt = 0; attempt < 200; attempt++) {
+                Motor_RequestPosition(DEV_BOTTOM_BELT);
+                if (xQueueReceive(CarCanQueueHandle, &carMsg, pdMS_TO_TICKS(50)) == pdTRUE) {
+                    if (carMsg.id == 0x409 && carMsg.len >= 6) {
+                        uint8_t resp_dev = 0;
+                        float pos_mm = Motor_ParsePosition(carMsg.data, &resp_dev);
+                        if (resp_dev == DEV_BOTTOM_BELT) {
+                            if (!has_last) {
+                                last_pos = pos_mm;
+                                has_last = 1;
+                                stable_count = 1;
+                            } else {
+                                if (fabsf(pos_mm - last_pos) <= 2.0f) {
+                                    stable_count++;
+                                } else {
+                                    stable_count = 1;
+                                    last_pos = pos_mm;
+                                }
+                            }
+
+                            if (stable_count >= stable_needed) {
+                                break; /* 底带稳定，移动完成 */
+                            }
+                        }
+                    }
+                }
+                osDelay(25);
+            }
+        }
         
         /* ===== 步骤5: 抓钩放下+转盘复位+底带前进 ===== */
         FlyBox_HookRelease();            /* 抓钩放下 */
-        osDelay(1000);
-        FlyBox_TurntableRotate(-90.0f);  /* 转盘逆时针90° */
+        osDelay(800);
+        FlyBox_TurntableRotate(90.0f);  /* 转盘逆时针90° */
         osDelay(1);
-        FlyBox_BeltMove(-550.0f);         /* 底带前进55cm */
-        osDelay(1000);                   /* 等待动作完成 */
+        FlyBox_BeltHome();                 /* 底带回到默认 30cm 处（300 mm） */
+        osDelay(1000);                   /* 等待动作完成 *
         
         /* 放下完成，等待下一个周期 */
         osDelay(5000);
