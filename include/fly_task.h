@@ -20,6 +20,9 @@ extern "C" {
 /* 当前识别到的飞箱ID（0表示未识别） */
 extern uint8_t g_current_flybox_id;
 
+/* 电机回零任务句柄 */
+extern osThreadId g_motorHomeTaskHandle;
+
 /* 测试任务句柄 */
 extern osThreadId g_testTaskHandle;
 
@@ -31,6 +34,13 @@ extern osThreadId g_testTaskHandle;
   * @retval None
   */
 void Motor_BindTask(void const *argument);
+
+/**
+  * @brief  电机回零任务
+  * @param  argument: 任务参数（未使用）
+  * @retval None
+  */
+void Motor_HomeTask(void const *argument);
 
 /**
   * @brief  飞箱测试任务

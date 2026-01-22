@@ -27,6 +27,9 @@ typedef struct {
 /* 当前识别到的飞箱ID（0表示未识别） */
 uint8_t g_current_flybox_id = 0;
 
+/* 电机回零任务句柄 */
+osThreadId g_motorHomeTaskHandle = NULL;
+
 /* 测试任务句柄 */
 osThreadId g_testTaskHandle = NULL;
 
@@ -34,16 +37,16 @@ osThreadId g_testTaskHandle = NULL;
 #define MOTOR_WHEEL_DIAMETER    50       /* 轮径 50mm */
 
 /* 各电机加速度配置 */
-#define ACCELERATION_TRACK      1000     /* 履带加速度 1000mm/s² */
-#define ACCELERATION_BELT       6000     /* 底带加速度 6000mm/s² */
-#define ACCELERATION_TURNTABLE  6000     /* 转盘加速度 6000mm/s² */
-#define ACCELERATION_HOOK       6000     /* 抓钩加速度 6000mm/s² */
+#define ACCELERATION_TRACK      2000     /* 履带加速度 2000mm/s² */
+#define ACCELERATION_BELT       12000     /* 底带加速度 12000mm/s² */
+#define ACCELERATION_TURNTABLE  12000     /* 转盘加速度 12000mm/s² */
+#define ACCELERATION_HOOK       12000     /* 抓钩加速度 12000mm/s² */
 
 /* 各电机速度配置 */
-#define VELOCITY_TRACK          500      /* 履带速度 500mm/s */
-#define VELOCITY_BELT           2425     /* 底带速度 2425mm/s */
-#define VELOCITY_TURNTABLE      2000     /* 转盘速度 2000mm/s */
-#define VELOCITY_HOOK           1000     /* 抓钩速度 1000mm/s */
+#define VELOCITY_TRACK          2000      /* 履带速度 2000mm/s */
+#define VELOCITY_BELT           9700      /* 底带速度 9700mm/s */
+#define VELOCITY_TURNTABLE      10000      /* 转盘速度 10000mm/s */
+#define VELOCITY_HOOK           10000      /* 抓钩速度 10000mm/s */
 
 /* 各电机速度数组（按MotorIndex_t顺序） */
 static const uint32_t g_motor_velocities[MOTOR_COUNT] = {
@@ -168,13 +171,29 @@ void Motor_BindTask(void const *argument)
         }
     }
     
-    /* 绑定完成，恢复测试任务 */
+    /* 绑定完成，启动电机回零任务 */
+    if (g_motorHomeTaskHandle != NULL)
+    {
+        osThreadResume(g_motorHomeTaskHandle);
+    }
+    /* 绑定完成，任务挂起 */
+	vTaskSuspend(NULL);
+}
+
+/**
+  * @brief  电机回零任务（占位，待实现）
+  * @param  argument: 任务参数（未使用）
+  * @retval None
+  */
+void Motor_HomeTask(void const *argument)
+{
+    (void)argument;
+    /* TODO: 实现电机回零流程 */
+    /* 回零完成后，恢复测试任务 */
     if (g_testTaskHandle != NULL)
     {
         osThreadResume(g_testTaskHandle);
     }
-    
-    /* 绑定完成，任务挂起 */
     vTaskSuspend(NULL);
 }
 
@@ -202,7 +221,40 @@ void FlyBox_TestTask(void const *argument)
         
         /* ===== 步骤1: 转盘旋转+底带前进，准备抓取 ===== */
         FlyBox_TurntableRotate(-90.0f);   /* 转盘逆时针90° */
-        osDelay(1500);                   /* 等待转盘稳定，增加 TOF 响应时间 */
+        /* 先延时50ms再判断动作完成 */
+        
+        {
+            const int stable_needed = 5;
+            int stable_count = 0;
+            float last_pos = 0.0f;
+            int has_last = 0;
+            CarCanMsg_t turn_msg;
+            for (int attempt = 0; attempt < 200; attempt++) {
+                Motor_RequestPosition(DEV_TURNTABLE);
+                if (xQueueReceive(CarCanQueueHandle, &turn_msg, pdMS_TO_TICKS(50)) == pdTRUE) {
+                    if (turn_msg.id == 0x409 && turn_msg.len >= 6) {
+                        uint8_t resp_dev = 0;
+                        float pos_mm = Motor_ParsePosition(turn_msg.data, &resp_dev);
+                        if (resp_dev == DEV_TURNTABLE) {
+                            if (!has_last) {
+                                last_pos = pos_mm;
+                                has_last = 1;
+                                stable_count = 1;
+                            } else {
+                                if (fabsf(pos_mm - last_pos) < 5.0f) {
+                                    stable_count++;
+                                } else {
+                                    stable_count = 1;
+                                    last_pos = pos_mm;
+                                }
+                            }
+                            if (stable_count >= stable_needed) break;
+                        }
+                    }
+                }
+                osDelay(25);
+            }
+        }
 
         /* 使用 TOF 读取距离并移动到底带停在 (x - 90mm)
            每次循环发送请求，若未收到回复则再次询问（最多等待约2秒） */
@@ -214,7 +266,7 @@ void FlyBox_TestTask(void const *argument)
             int parsed = 0;
 
             /* 循环发送请求并等待短时响应 */
-            for (int wait = 0; wait < 20; wait++) {
+            for (int wait = 0; wait < 200; wait++) {
                 /* 每次循环重新发送请求，如果设备没有回复就再次询问 */
                 FlyBox_RequestTOF(tof_dev);
 
@@ -226,6 +278,7 @@ void FlyBox_TestTask(void const *argument)
                         }
                     }
                 }
+                osDelay(20);
                 /* 若未收到，继续下一轮（再次发送请求） */
             }
 
@@ -337,7 +390,40 @@ void FlyBox_TestTask(void const *argument)
         FlyBox_HookRelease();            /* 抓钩放下 */
         osDelay(800);
         FlyBox_TurntableRotate(90.0f);  /* 转盘逆时针90° */
-        osDelay(1000);                   /* 等待动作完成 */
+        osDelay(50);
+        /* 等待转盘动作完成：连续5次变化<5mm */
+        {
+            const int stable_needed = 5;
+            int stable_count = 0;
+            float last_pos = 0.0f;
+            int has_last = 0;
+            CarCanMsg_t turn_msg;
+            for (int attempt = 0; attempt < 200; attempt++) {
+                Motor_RequestPosition(DEV_TURNTABLE);
+                if (xQueueReceive(CarCanQueueHandle, &turn_msg, pdMS_TO_TICKS(50)) == pdTRUE) {
+                    if (turn_msg.id == 0x409 && turn_msg.len >= 6) {
+                        uint8_t resp_dev = 0;
+                        float pos_mm = Motor_ParsePosition(turn_msg.data, &resp_dev);
+                        if (resp_dev == DEV_TURNTABLE) {
+                            if (!has_last) {
+                                last_pos = pos_mm;
+                                has_last = 1;
+                                stable_count = 1;
+                            } else {
+                                if (fabsf(pos_mm - last_pos) < 5.0f) {
+                                    stable_count++;
+                                } else {
+                                    stable_count = 1;
+                                    last_pos = pos_mm;
+                                }
+                            }
+                            if (stable_count >= stable_needed) break;
+                        }
+                    }
+                }
+                osDelay(25);
+            }
+        }
         
         /* ===== 步骤6: 使用 TOF(0x1A) 驱动履带后退，直到箱子距离 < 8.5cm =====
            流程：
@@ -526,7 +612,40 @@ void FlyBox_TestTask(void const *argument)
         
         /* ===== 步骤2: 转盘旋转，转完后抓钩抓取 ===== */
         FlyBox_TurntableRotate(-90.0f);   /* 转盘顺时针90° */
-        osDelay(1000);                   /* 等待转盘转完 */
+        osDelay(50);
+        /* 等待转盘动作完成：连续5次变化<5mm */
+        {
+            const int stable_needed = 5;
+            int stable_count = 0;
+            float last_pos = 0.0f;
+            int has_last = 0;
+            CarCanMsg_t turn_msg;
+            for (int attempt = 0; attempt < 200; attempt++) {
+                Motor_RequestPosition(DEV_TURNTABLE);
+                if (xQueueReceive(CarCanQueueHandle, &turn_msg, pdMS_TO_TICKS(50)) == pdTRUE) {
+                    if (turn_msg.id == 0x409 && turn_msg.len >= 6) {
+                        uint8_t resp_dev = 0;
+                        float pos_mm = Motor_ParsePosition(turn_msg.data, &resp_dev);
+                        if (resp_dev == DEV_TURNTABLE) {
+                            if (!has_last) {
+                                last_pos = pos_mm;
+                                has_last = 1;
+                                stable_count = 1;
+                            } else {
+                                if (fabsf(pos_mm - last_pos) < 5.0f) {
+                                    stable_count++;
+                                } else {
+                                    stable_count = 1;
+                                    last_pos = pos_mm;
+                                }
+                            }
+                            if (stable_count >= stable_needed) break;
+                        }
+                    }
+                }
+                osDelay(25);
+            }
+        }
         FlyBox_HookGrab();               /* 抓钩抓取 */
         osDelay(800);                   /* 等待抓取完成 */
         
@@ -573,14 +692,9 @@ void FlyBox_TestTask(void const *argument)
             }
         }
         
-        /* ===== 步骤5: 抓钩放下+转盘复位+底带前进 ===== */
+        /* ===== 步骤5: 只放下抓钩，不回默认位置 ===== */
         FlyBox_HookRelease();            /* 抓钩放下 */
         osDelay(800);
-        FlyBox_TurntableRotate(90.0f);  /* 转盘逆时针90° */
-        osDelay(1);
-        FlyBox_BeltHome();                 /* 底带回到默认 30cm 处（300 mm） */
-        osDelay(1000);                   /* 等待动作完成 *
-        
         /* 放下完成，等待下一个周期 */
         osDelay(5000);
     }
