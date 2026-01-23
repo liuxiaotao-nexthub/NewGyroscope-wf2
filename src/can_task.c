@@ -4,8 +4,9 @@
 #include <stdint.h>
 #include <string.h>
 
-/* 外部变量（小车队列句柄，在 NewGyroscope.c 中定义） */
+/* 外部变量（消息队列句柄，在 NewGyroscope.c 中定义） */
 extern osMessageQId CarCanQueueHandle;
+extern osMessageQId MotorStatusQueueHandle;
 
 /* CAN 发送任务实现 */
 void CAN_SendTask(void const *argument)
@@ -50,15 +51,25 @@ void CAN_ControlTask(void const *argument)
             /* 清除全局接收标志 */
             CAN_RxFlag = 0;
 
-            /* 处理 0x312（SN 上报）、0x409（电机位移）以及 0x420+dev（剩余位移）消息 */
-            if ((id == 0x312 && len == 7) || (id == 0x409) || (id >= 0x421 && id <= 0x42F))
+            /* 处理 0x312（SN 上报）和 0x409（电机位移）消息 */
+            if ((id == 0x312 && len == 7) || (id == 0x409))
             {
-                /* 将消息放入队列 */
+                /* 将消息放入CarCanQueue */
                 carMsg.id = id;
                 carMsg.len = len;
                 memcpy(carMsg.data, localData, len);
                 /* 使用 xQueueOverwrite 覆盖旧数据（队列大小为1时适用） */
                 xQueueOverwrite(CarCanQueueHandle, &carMsg);
+            }
+            /* 处理 0x440+dev（电机状态）消息 */
+            else if (id >= 0x441 && id <= 0x445)
+            {
+                /* 将消息放入MotorStatusQueue */
+                carMsg.id = id;
+                carMsg.len = len;
+                memcpy(carMsg.data, localData, len);
+                /* 使用 xQueueSend 发送到队列（队列深度为5） */
+                xQueueSend(MotorStatusQueueHandle, &carMsg, 0);
             }
         }
 

@@ -24,8 +24,8 @@
 /* 转盘比例系数 */
 #define TURNTABLE_RATIO         15.222f   /* 转盘比例系数 (脉冲/度) */
 
-/* 抓钩位置 */
-#define HOOK_GRAB_POSITION      655.36f   /* 抓钩抓取位置 */
+/* 抓钩比例系数 */
+#define HOOK_RATIO              7.28178f  /* 抓钩比例系数 (脉冲/度) */
 
 /* ========== 飞箱配置数据 ========== */
 
@@ -153,21 +153,14 @@ void FlyBox_TurntableRotate(float angle_deg)
 }
 
 /**
-  * @brief  控制抓钩抓取
+  * @brief  控制抓钩旋转
+  * @param  angle_deg: 旋转角度（单位：度，正数顺时针，负数逆时针）
   * @retval None
   */
-void FlyBox_HookGrab(void)
+void FlyBox_HookRotate(float angle_deg)
 {
-    Motor_SendDisplacement(DEV_HOOK, -HOOK_GRAB_POSITION);
-}
-
-/**
-  * @brief  控制抓钩放下
-  * @retval None
-  */
-void FlyBox_HookRelease(void)
-{
-    Motor_SendDisplacement(DEV_HOOK, HOOK_GRAB_POSITION);
+    float pulse = angle_deg * HOOK_RATIO;
+    Motor_SendDisplacement(DEV_HOOK, pulse);
 }
 
 /**

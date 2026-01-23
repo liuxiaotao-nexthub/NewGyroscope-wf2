@@ -90,16 +90,11 @@ void FlyBox_BeltMove(float distance_mm);
 void FlyBox_TurntableRotate(float angle_deg);
 
 /**
-  * @brief  控制抓钩抓取
+  * @brief  控制抓钩旋转
+  * @param  angle_deg: 旋转角度（单位：度，正数顺时针，负数逆时针）
   * @retval None
   */
-void FlyBox_HookGrab(void);
-
-/**
-  * @brief  控制抓钩放下
-  * @retval None
-  */
-void FlyBox_HookRelease(void);
+void FlyBox_HookRotate(float angle_deg);
 
 /* 将底带回到默认位置（单位：mm，默认 300 mm） */
 void FlyBox_BeltHome(void);

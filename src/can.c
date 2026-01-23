@@ -140,6 +140,7 @@ static void CAN_FilterConfig(void)
 {
 	CAN_FilterTypeDef sFilterConfig;
 
+	/* 过滤器组0：接收 0x312 和 0x409 */
 	sFilterConfig.FilterBank = 0;
 	sFilterConfig.FilterMode = CAN_FILTERMODE_IDLIST;     /* 列表模式 */
 	sFilterConfig.FilterScale = CAN_FILTERSCALE_16BIT;    /* 16位标度 */
@@ -158,6 +159,30 @@ static void CAN_FilterConfig(void)
 	{
 		while (1);
 	}
+
+	// /* 过滤器组1：接收 0x441-0x444（电机状态消息，设备1-4） */
+	// sFilterConfig.FilterBank = 1;
+	// sFilterConfig.FilterIdHigh = (0x441 << 5);
+	// sFilterConfig.FilterIdLow = (0x442 << 5);
+	// sFilterConfig.FilterMaskIdHigh = (0x443 << 5);
+	// sFilterConfig.FilterMaskIdLow = (0x444 << 5);
+
+	// if (HAL_CAN_ConfigFilter(&hcan, &sFilterConfig) != HAL_OK)
+	// {
+	// 	while (1);
+	// }
+    //
+	// /* 过滤器组2：接收 0x445（电机状态消息，设备5） */
+	// sFilterConfig.FilterBank = 2;
+	// sFilterConfig.FilterIdHigh = (0x445 << 5);
+	// sFilterConfig.FilterIdLow = (0x445 << 5);             /* 重复 */
+	// sFilterConfig.FilterMaskIdHigh = (0x445 << 5);        /* 重复 */
+	// sFilterConfig.FilterMaskIdLow = (0x445 << 5);         /* 重复 */
+
+	// if (HAL_CAN_ConfigFilter(&hcan, &sFilterConfig) != HAL_OK)
+	// {
+	// 	while (1);
+	// }
 }
 
 /**

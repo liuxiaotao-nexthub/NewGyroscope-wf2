@@ -50,7 +50,8 @@ osThreadId MainTaskHandle;
 /* 小车 CAN 消息队列句柄 */
 osMessageQId CarCanQueueHandle = NULL;
 
-/* Private function prototypes -----------------------------------------------*/
+	/* 电机状态消息队列句柄 */
+	osMessageQId MotorStatusQueueHandle = NULL;
 static void SystemClock_Config(void);
 static void Main_Task(void const *argument);
 
@@ -128,9 +129,13 @@ int main(void)
 	/* Initialize CAN */
 	CAN_Init();
 
-	/* 创建小车 CAN 消息队列（队列深度 2） */
+	/* 创建小车 CAN 消息队列（队列深度 1） */
 	osMessageQDef(carCanQueue, 1, CarCanMsg_t);
 	CarCanQueueHandle = osMessageCreate(osMessageQ(carCanQueue), NULL);
+
+	/* 创建电机状态消息队列（队列深度 5，每个电机一个） */
+	osMessageQDef(motorStatusQueue, 5, CarCanMsg_t);
+	MotorStatusQueueHandle = osMessageCreate(osMessageQ(motorStatusQueue), NULL);
 
 	/* Create CAN send task */
 	osThreadDef(CANSEND, CAN_SendTask, osPriorityNormal, 0, configMINIMAL_STACK_SIZE);
@@ -144,15 +149,13 @@ int main(void)
 	osThreadDef(MOTORBIND, Motor_BindTask, osPriorityNormal, 0, 256);
 	osThreadCreate(osThread(MOTORBIND), NULL);
 
-	/* Create Motor home task (挂起启动) */
+	/* Create Motor home task */
 	osThreadDef(MOTORHOME, Motor_HomeTask, osPriorityNormal, 0, 256);
 	g_motorHomeTaskHandle = osThreadCreate(osThread(MOTORHOME), NULL);
-	osThreadSuspend(g_motorHomeTaskHandle);
 
-	/* Create FlyBox test task (挂起启动) */
+	/* Create FlyBox test task */
 	osThreadDef(FLYTEST, FlyBox_TestTask, osPriorityNormal, 0, 512);
 	g_testTaskHandle = osThreadCreate(osThread(FLYTEST), NULL);
-	osThreadSuspend(g_testTaskHandle);
 
 	/* Main task definition */
 	osThreadDef(MAIN, Main_Task, osPriorityNormal, 0, 64);
