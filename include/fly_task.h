@@ -46,6 +46,7 @@ void Motor_HomeTask(void const *argument);
   * @brief  飞箱测试任务
   * @param  argument: 任务参数（未使用）
   * @retval None
+  * @note   箱子抓取和传送流程测试（拉上+放下循环）
   */
 void FlyBox_TestTask(void const *argument);
 
