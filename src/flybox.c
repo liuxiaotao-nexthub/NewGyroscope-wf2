@@ -116,18 +116,19 @@ void FlyBox_RightTrackMove(float distance_mm)
 }
 
 /**
-  * @brief  控制底带位移
+  * @brief  控制底带位移（管理全局位置，用于测试任务）
   * @param  distance_mm: 位移距离（单位：mm，正数前进，负数后退）
   * @retval None
+  * @note   会更新全局位置 g_belt_position_mm
   */
 void FlyBox_BeltMove(float distance_mm)
 {
     /* 目标新位置（mm） */
     float target_pos = g_belt_position_mm + distance_mm;
 
-//    /* 限制目标位置在 [0, BELT_MAX_MM] 范围内 */
-//    if (target_pos > BELT_MAX_MM) target_pos = BELT_MAX_MM;
-//    if (target_pos < 0.0f) target_pos = 0.0f;
+   /* 限制目标位置在 [0, BELT_MAX_MM] 范围内 */
+   if (target_pos > BELT_MAX_MM) target_pos = BELT_MAX_MM;
+   if (target_pos < 0.0f) target_pos = 0.0f;
 
     /* 实际需要移动的距离（mm） */
     float actual_move = target_pos - g_belt_position_mm;
@@ -139,6 +140,19 @@ void FlyBox_BeltMove(float distance_mm)
     Motor_SendDisplacement(DEV_BOTTOM_BELT, pulse);
     /* 更新全局位置（单位：mm） */
     g_belt_position_mm = target_pos;
+}
+
+/**
+  * @brief  控制底带原始移动（不管理全局位置，用于回零任务）
+  * @param  distance_mm: 位移距离（单位：mm，正数前进，负数后退）
+  * @retval None
+  * @note   直接移动，不更新 g_belt_position_mm，不做范围限制
+  */
+void FlyBox_BeltMoveRaw(float distance_mm)
+{
+    /* 直接转换为脉冲并发送 */
+    float pulse = distance_mm * BELT_RATIO;
+    Motor_SendDisplacement(DEV_BOTTOM_BELT, pulse);
 }
 
 /**

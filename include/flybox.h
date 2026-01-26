@@ -76,11 +76,20 @@ void FlyBox_LeftTrackMove(float distance_mm);
 void FlyBox_RightTrackMove(float distance_mm);
 
 /**
-  * @brief  控制底带位移
+  * @brief  控制底带位移（管理全局位置，用于测试任务）
   * @param  distance_mm: 位移距离（单位：mm，正数前进，负数后退）
   * @retval None
+  * @note   会更新全局位置 g_belt_position_mm
   */
 void FlyBox_BeltMove(float distance_mm);
+
+/**
+  * @brief  控制底带原始移动（不管理全局位置，用于回零任务）
+  * @param  distance_mm: 位移距离（单位：mm，正数前进，负数后退）
+  * @retval None
+  * @note   直接移动，不更新 g_belt_position_mm，不做范围限制
+  */
+void FlyBox_BeltMoveRaw(float distance_mm);
 
 /**
   * @brief  控制转盘旋转

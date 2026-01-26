@@ -195,17 +195,21 @@ void Motor_HomeTask(void const *argument)
     
     /* ===== 回零流程：全部运动到零点 → 发送0.1mm → 上电使能 → 回默认位置 ===== */
     
-    /* 步骤0: 降低转盘速度为原速度的1/4 */
+    /* 步骤0: 降低转盘和底带速度 */
     Motor_SetVelocity(DEV_TURNTABLE, VELOCITY_TURNTABLE / 4);  /* 10000 -> 2500 mm/s */
+    osDelay(5);
+    Motor_SetVelocity(DEV_BOTTOM_BELT, VELOCITY_BELT / 4);     /* 9700 -> 2425 mm/s */
     osDelay(50);
     
-    /* 步骤1: 抓钩上抓270°，转盘顺时针转360°（运动到零点） */
+    /* 步骤1: 抓钩上抓270°，转盘顺时针转360°，底带回退60cm（运动到零点） */
     FlyBox_HookRotate(-270.0f);  /* 负数表示上抓 */
     osDelay(5);
     FlyBox_TurntableRotate(360.0f);  /* 正数表示顺时针 */
     osDelay(5);
+    FlyBox_BeltMoveRaw(-600.0f);  /* 回退60cm（不管理全局位置） */
+    osDelay(50);
     
-    /* 步骤2: 轮流检测两个电机停止移动（到达零点） */
+    /* 步骤2: 轮流检测三个电机停止移动（到达零点） */
     {
         const int stable_needed = 5;
         
@@ -221,14 +225,23 @@ void Motor_HomeTask(void const *argument)
         int turntable_has_last = 0;
         int turntable_stopped = 0;
         
+        /* 底带电机状态 */
+        int belt_stable_count = 0;
+        float belt_last_pos = 0.0f;
+        int belt_has_last = 0;
+        int belt_stopped = 0;
+        
         for (uint32_t attempt = 0;; attempt++) {
             /* 防止计数器溢出，超过10000时归零 */
             if (attempt > 10000) {
                 attempt = 0;
             }
             
-            /* 轮流请求两个电机的位置 */
-            uint8_t query_dev = (attempt % 2 == 0) ? DEV_HOOK : DEV_TURNTABLE;
+            /* 轮流请求三个电机的位置 */
+            uint8_t query_dev;
+            if (attempt % 3 == 0) query_dev = DEV_HOOK;
+            else if (attempt % 3 == 1) query_dev = DEV_TURNTABLE;
+            else query_dev = DEV_BOTTOM_BELT;
             
             Motor_RequestPosition(query_dev);
             
@@ -286,47 +299,9 @@ void Motor_HomeTask(void const *argument)
                             FlyBox_TurntableRotate(-124.0f);
                         }
                     }
-                }
-            }
-            
-            /* 两个电机都停止后退出循环 */
-            if (hook_stopped && turntable_stopped) {
-                break;
-            }
-            
-            osDelay(5);
-        }
-    }
-    
-    /* 步骤3: 底带回零（单独执行，不与前面同步） */
-    /* 降低底带速度为原速度的1/2 */
-    Motor_SetVelocity(DEV_BOTTOM_BELT, VELOCITY_BELT / 4);  /* 9700 -> 4850 mm/s */
-    osDelay(2000);
-    
-    /* 底带回退60cm */
-    FlyBox_BeltMove(-600.0f);
-    osDelay(50);
-    
-    /* 检测底带停止移动 */
-    {
-        const int stable_needed = 5;
-        int belt_stable_count = 0;
-        float belt_last_pos = 0.0f;
-        int belt_has_last = 0;
-        
-        for (uint32_t attempt = 0;; attempt++) {
-            if (attempt > 10000) {
-                attempt = 0;
-            }
-            
-            Motor_RequestPosition(DEV_BOTTOM_BELT);
-            
-            if (xQueueReceive(CarCanQueueHandle, &carMsg, pdMS_TO_TICKS(50)) == pdTRUE) {
-                if (carMsg.id == 0x409 && carMsg.len >= 6) {
-                    uint8_t resp_dev = 0;
-                    float pos_mm = Motor_ParsePosition(carMsg.data, &resp_dev);
                     
-                    if (resp_dev == DEV_BOTTOM_BELT) {
+                    /* 处理底带电机响应 */
+                    if (resp_dev == DEV_BOTTOM_BELT && !belt_stopped) {
                         if (!belt_has_last) {
                             belt_last_pos = pos_mm;
                             belt_has_last = 1;
@@ -341,37 +316,40 @@ void Motor_HomeTask(void const *argument)
                         }
                         
                         if (belt_stable_count >= stable_needed) {
-                            break;  /* 底带已停止 */
+                            belt_stopped = 1;  /* 底带已停止 */
+                            /* 重新使能底带电机 */
+                            Motor_Enable(MOTOR_ENABLE, DEV_BOTTOM_BELT);
+                            osDelay(5);
+                            /* 立即回到默认位置：前进34cm（不管理全局位置） */
+                            FlyBox_BeltMoveRaw(340.0f);
                         }
                     }
                 }
             }
             
-            osDelay(25);
+            /* 三个电机都停止后退出循环 */
+            if (hook_stopped && turntable_stopped && belt_stopped) {
+                break;
+            }
+            
+            osDelay(5);
         }
     }
     
-    /* 重新使能底带电机 */
-    Motor_Enable(MOTOR_ENABLE, DEV_BOTTOM_BELT);
-    osDelay(5);
-    
-    /* 底带前进2cm */
-    FlyBox_BeltMove(340.0f);
-    osDelay(500);
-    
-    /* 恢复底带速度 */
-    Motor_SetVelocity(DEV_BOTTOM_BELT, VELOCITY_BELT);  /* 恢复为 9700 mm/s */
-    osDelay(50);
-    
-    osDelay(1000);
-	FlyBox_HookRotate(-90.0f);        /* 抓钩再上抓90° */
-    osDelay(500);
-    
-    /* 恢复转盘速度 */
+    /* 恢复转盘和底带速度 */
     Motor_SetVelocity(DEV_TURNTABLE, VELOCITY_TURNTABLE);  /* 恢复为 10000 mm/s */
+    osDelay(5);
+    Motor_SetVelocity(DEV_BOTTOM_BELT, VELOCITY_BELT);     /* 恢复为 9700 mm/s */
     osDelay(50);
     
-    /* 回零完成，任务挂起 */
+    /* 回零完成，恢复测试任务 */
+    if (g_testTaskHandle != NULL)
+    {
+	    osDelay(2000);
+        osThreadResume(g_testTaskHandle);
+    }
+    
+    /* 任务挂起 */
     vTaskSuspend(NULL);
 }
 
