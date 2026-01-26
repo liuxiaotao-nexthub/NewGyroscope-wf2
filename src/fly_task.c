@@ -195,10 +195,12 @@ void Motor_HomeTask(void const *argument)
     
     /* ===== 回零流程：全部运动到零点 → 发送0.1mm → 上电使能 → 回默认位置 ===== */
     
-    /* 步骤0: 降低转盘和底带速度 */
+    /* 步骤0: 降低转盘、底带和抓钩速度 */
     Motor_SetVelocity(DEV_TURNTABLE, VELOCITY_TURNTABLE / 4);  /* 10000 -> 2500 mm/s */
     osDelay(5);
     Motor_SetVelocity(DEV_BOTTOM_BELT, VELOCITY_BELT / 4);     /* 9700 -> 2425 mm/s */
+    osDelay(5);
+    Motor_SetVelocity(DEV_HOOK, VELOCITY_HOOK / 4);            /* 10000 -> 2500 mm/s */
     osDelay(50);
     
     /* 步骤1: 抓钩上抓270°，转盘顺时针转360°，底带回退60cm（运动到零点） */
@@ -267,11 +269,12 @@ void Motor_HomeTask(void const *argument)
                         
                         if (hook_stable_count >= stable_needed) {
                             hook_stopped = 1;  /* 抓钩已停止 */
+                            /* 先设置默认位置：放下215° */
+                            FlyBox_HookRotate(215.0f);
+                            osDelay(5);
                             /* 重新使能抓钩电机 */
                             Motor_Enable(MOTOR_ENABLE, DEV_HOOK);
-                            osDelay(10);
-                            /* 立即回到默认位置：放下215° */
-                            FlyBox_HookRotate(215.0f);
+                            osDelay(5);
                         }
                     }
                     
@@ -292,11 +295,12 @@ void Motor_HomeTask(void const *argument)
                         
                         if (turntable_stable_count >= stable_needed) {
                             turntable_stopped = 1;  /* 转盘已停止 */
+                            /* 先设置默认位置：逆转124° */
+                            FlyBox_TurntableRotate(-124.0f);
+                            osDelay(5);
                             /* 重新使能转盘电机 */
                             Motor_Enable(MOTOR_ENABLE, DEV_TURNTABLE);
-                            osDelay(10);
-                            /* 立即回到默认位置：逆转124° */
-                            FlyBox_TurntableRotate(-124.0f);
+                            osDelay(5);
                         }
                     }
                     
@@ -317,11 +321,12 @@ void Motor_HomeTask(void const *argument)
                         
                         if (belt_stable_count >= stable_needed) {
                             belt_stopped = 1;  /* 底带已停止 */
+                            /* 先设置默认位置：前进34cm（不管理全局位置） */
+                            FlyBox_BeltMoveRaw(340.0f);
+                            osDelay(5);
                             /* 重新使能底带电机 */
                             Motor_Enable(MOTOR_ENABLE, DEV_BOTTOM_BELT);
                             osDelay(5);
-                            /* 立即回到默认位置：前进34cm（不管理全局位置） */
-                            FlyBox_BeltMoveRaw(340.0f);
                         }
                     }
                 }
@@ -332,14 +337,16 @@ void Motor_HomeTask(void const *argument)
                 break;
             }
             
-            osDelay(5);
+            osDelay(2);
         }
     }
     
-    /* 恢复转盘和底带速度 */
+    /* 恢复转盘、底带和抓钩速度 */
     Motor_SetVelocity(DEV_TURNTABLE, VELOCITY_TURNTABLE);  /* 恢复为 10000 mm/s */
     osDelay(5);
     Motor_SetVelocity(DEV_BOTTOM_BELT, VELOCITY_BELT);     /* 恢复为 9700 mm/s */
+    osDelay(5);
+    Motor_SetVelocity(DEV_HOOK, VELOCITY_HOOK);            /* 恢复为 10000 mm/s */
     osDelay(50);
     
     /* 回零完成，恢复测试任务 */
