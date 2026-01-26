@@ -153,9 +153,19 @@ int main(void)
 	osThreadDef(MOTORHOME, Motor_HomeTask, osPriorityNormal, 0, 512);
 	g_motorHomeTaskHandle = osThreadCreate(osThread(MOTORHOME), NULL);
 
-	/* Create FlyBox test task */
-	osThreadDef(FLYTEST, FlyBox_TestTask, osPriorityNormal, 0, 512);
-	g_testTaskHandle = osThreadCreate(osThread(FLYTEST), NULL);
+	/* Create semaphores for pull/push task synchronization */
+	osSemaphoreDef(pullDoneSem);
+	g_pullDoneSemHandle = osSemaphoreCreate(osSemaphore(pullDoneSem), 1);
+	osSemaphoreDef(pushDoneSem);
+	g_pushDoneSemHandle = osSemaphoreCreate(osSemaphore(pushDoneSem), 1);
+
+	/* Create FlyBox pull task */
+	osThreadDef(FLYPULL, FlyBox_PullTask, osPriorityNormal, 0, 512);
+	g_pullTaskHandle = osThreadCreate(osThread(FLYPULL), NULL);
+
+	/* Create FlyBox push task */
+	osThreadDef(FLYPUSH, FlyBox_PushTask, osPriorityNormal, 0, 512);
+	g_pushTaskHandle = osThreadCreate(osThread(FLYPUSH), NULL);
 
 	/* Main task definition */
 	osThreadDef(MAIN, Main_Task, osPriorityNormal, 0, 64);

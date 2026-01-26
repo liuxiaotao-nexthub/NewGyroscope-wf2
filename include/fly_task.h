@@ -23,8 +23,17 @@ extern uint8_t g_current_flybox_id;
 /* 电机回零任务句柄 */
 extern osThreadId g_motorHomeTaskHandle;
 
-/* 测试任务句柄 */
-extern osThreadId g_testTaskHandle;
+/* 拉取任务句柄 */
+extern osThreadId g_pullTaskHandle;
+
+/* 推出任务句柄 */
+extern osThreadId g_pushTaskHandle;
+
+/* 拉取完成信号量 */
+extern osSemaphoreId g_pullDoneSemHandle;
+
+/* 推出完成信号量 */
+extern osSemaphoreId g_pushDoneSemHandle;
 
 /* ========== 任务函数声明 ========== */
 
@@ -43,12 +52,20 @@ void Motor_BindTask(void const *argument);
 void Motor_HomeTask(void const *argument);
 
 /**
-  * @brief  飞箱测试任务
+  * @brief  飞箱拉取任务
   * @param  argument: 任务参数（未使用）
   * @retval None
-  * @note   箱子抓取和传送流程测试（拉上+放下循环）
+  * @note   拉上箱子流程
   */
-void FlyBox_TestTask(void const *argument);
+void FlyBox_PullTask(void const *argument);
+
+/**
+  * @brief  飞箱推出任务
+  * @param  argument: 任务参数（未使用）
+  * @retval None
+  * @note   放下箱子流程
+  */
+void FlyBox_PushTask(void const *argument);
 
 #ifdef __cplusplus
 }

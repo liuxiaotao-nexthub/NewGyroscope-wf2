@@ -30,8 +30,17 @@ uint8_t g_current_flybox_id = 0;
 /* 电机回零任务句柄 */
 osThreadId g_motorHomeTaskHandle = NULL;
 
-/* 测试任务句柄 */
-osThreadId g_testTaskHandle = NULL;
+/* 拉取任务句柄 */
+osThreadId g_pullTaskHandle = NULL;
+
+/* 推出任务句柄 */
+osThreadId g_pushTaskHandle = NULL;
+
+/* 拉取完成信号量 */
+osSemaphoreId g_pullDoneSemHandle = NULL;
+
+/* 推出完成信号量 */
+osSemaphoreId g_pushDoneSemHandle = NULL;
 
 /* 电机运动参数配置 */
 #define MOTOR_WHEEL_DIAMETER    50       /* 轮径 50mm */
@@ -347,13 +356,13 @@ void Motor_HomeTask(void const *argument)
     Motor_SetVelocity(DEV_BOTTOM_BELT, VELOCITY_BELT);     /* 恢复为 9700 mm/s */
     osDelay(5);
     Motor_SetVelocity(DEV_HOOK, VELOCITY_HOOK);            /* 恢复为 10000 mm/s */
-    osDelay(50);
+	
+    osDelay(2000);
     
-    /* 回零完成，恢复测试任务 */
-    if (g_testTaskHandle != NULL)
+    /* 回零完成，恢复拉取任务 */
+    if (g_pullTaskHandle != NULL)
     {
-	    osDelay(2000);
-        osThreadResume(g_testTaskHandle);
+        osThreadResume(g_pullTaskHandle);
     }
     
     /* 任务挂起 */
@@ -361,23 +370,26 @@ void Motor_HomeTask(void const *argument)
 }
 
 /**
-  * @brief  飞箱测试任务
+  * @brief  飞箱拉取任务
   * @param  argument: 任务参数（未使用）
   * @retval None
-  * @note   箱子抓取和传送流程测试（拉上+放下循环）
+  * @note   拉上箱子流程
   */
-void FlyBox_TestTask(void const *argument)
+void FlyBox_PullTask(void const *argument)
 {
     (void)argument;
     CarCanMsg_t carMsg;
     
-    /* 任务开始时先挂起，等待回零任务恢夏 */
+    /* 任务开始时先挂起，等待回零任务恢复 */
     vTaskSuspend(NULL);
-    
-    float last_belt_move_mm = 0.0f;
 
     for (;;)
     {
+        /* 等待pullDoneSem（第一次因为初始为1会立即通过） */
+        if (g_pullDoneSemHandle != NULL) {
+            osSemaphoreWait(g_pullDoneSemHandle, osWaitForever);
+        }
+        
         /* ============================================== */
         /* ========== 拉上箱子流程 ========== */
         /* ============================================== */
@@ -416,8 +428,6 @@ void FlyBox_TestTask(void const *argument)
                     /* 限制最大前进为 550mm（55cm）以避免碰撞 */
                     if (move_mm > 550.0f) move_mm = 550.0f;
                     FlyBox_BeltMove(move_mm);
-                    /* 记录底带实际前进量，供抓取后回退使用 */
-                    last_belt_move_mm = move_mm;
 
                     /* 继续查询 TOF，直到距离稳定：连续 5 次变化 < 5mm（0.5cm）视为稳定 */
                     float prev_dist = dist_mm;
@@ -675,14 +685,37 @@ void FlyBox_TestTask(void const *argument)
             }
         }
         
-        /* 拉上完成，等待一段时间 */
-        osDelay(1000);
+        /* 拉上完成，释放信号量通知推出任务 */
+        if (g_pushDoneSemHandle != NULL) {
+            osSemaphoreRelease(g_pushDoneSemHandle);
+        }
+    }
+}
 
-        /* 重置记录，准备下一个周期 */
-        last_belt_move_mm = 0.0f;
+/**
+  * @brief  飞箱推出任务
+  * @param  argument: 任务参数（未使用）
+  * @retval None
+  * @note   放下箱子流程
+  */
+void FlyBox_PushTask(void const *argument)
+{
+    (void)argument;
+    CarCanMsg_t carMsg;
+    if (g_pushDoneSemHandle != NULL) {
+        osSemaphoreWait(g_pushDoneSemHandle, osWaitForever);
+    }
+    for (;;)
+    {
+        /* 等待拉取任务完成信号（初始为0，会阻塞直到拉取任务释放） */
+        if (g_pushDoneSemHandle != NULL) {
+            osSemaphoreWait(g_pushDoneSemHandle, osWaitForever);
+        }
+        
+        osDelay(1000);
         
         /* ============================================== */
-        /* ========== 放下箱子流程（反向操作） ========== */
+        /* ========== 放下箱子流程 ========== */
         /* ============================================== */
         
         /* ===== 步骤1: 使用 TOF(0x1A) 驱动履带前进，准备送出箱子（循环直到 TOF 在 23~24cm 范围内） ===== */
@@ -835,10 +868,15 @@ void FlyBox_TestTask(void const *argument)
             }
         }
         
-        /* ===== 步骤5: 只放下抓钩（下钩90°），不回默认位置 ===== */
-        FlyBox_HookRotate(90.0f);        /* 抓钩下钩90° */
+        /* ===== 步骤4: 放下抓钩 ===== */
+        FlyBox_HookRotate(90.0f);
         osDelay(800);
-        /* 放下完成，等待下一个周期 */
-        osDelay(5000);
+        
+        /* 推出完成，释放信号量通知拉取任务 */
+        if (g_pullDoneSemHandle != NULL) {
+            osSemaphoreRelease(g_pullDoneSemHandle);
+        }
+        
+        osDelay(2000);
     }
 }
