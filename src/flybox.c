@@ -125,9 +125,9 @@ void FlyBox_BeltMove(float distance_mm)
     /* 目标新位置（mm） */
     float target_pos = g_belt_position_mm + distance_mm;
 
-    /* 限制目标位置在 [0, BELT_MAX_MM] 范围内 */
-    if (target_pos > BELT_MAX_MM) target_pos = BELT_MAX_MM;
-    if (target_pos < 0.0f) target_pos = 0.0f;
+//    /* 限制目标位置在 [0, BELT_MAX_MM] 范围内 */
+//    if (target_pos > BELT_MAX_MM) target_pos = BELT_MAX_MM;
+//    if (target_pos < 0.0f) target_pos = 0.0f;
 
     /* 实际需要移动的距离（mm） */
     float actual_move = target_pos - g_belt_position_mm;

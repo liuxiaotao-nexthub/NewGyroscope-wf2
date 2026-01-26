@@ -150,7 +150,7 @@ int main(void)
 	osThreadCreate(osThread(MOTORBIND), NULL);
 
 	/* Create Motor home task */
-	osThreadDef(MOTORHOME, Motor_HomeTask, osPriorityNormal, 0, 256);
+	osThreadDef(MOTORHOME, Motor_HomeTask, osPriorityNormal, 0, 512);
 	g_motorHomeTaskHandle = osThreadCreate(osThread(MOTORHOME), NULL);
 
 	/* Create FlyBox test task */

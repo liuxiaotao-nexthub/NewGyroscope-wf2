@@ -181,23 +181,197 @@ void Motor_BindTask(void const *argument)
 }
 
 /**
-  * @brief  电机回零任务（占位，待实现）
+  * @brief  电机回零任务
   * @param  argument: 任务参数（未使用）
   * @retval None
   */
 void Motor_HomeTask(void const *argument)
 {
     (void)argument;
+    CarCanMsg_t carMsg;
     
-    /* 任务开始时先挂起，等待绑定任务恢夏 */
+    /* 任务开始时先挂起，等待绑定任务恢复 */
     vTaskSuspend(NULL);
     
-    /* TODO: 实现电机回零流程 */
-    /* 回零完成后，恢复测试任务 */
-    if (g_testTaskHandle != NULL)
+    /* ===== 回零流程：全部运动到零点 → 发送0.1mm → 上电使能 → 回默认位置 ===== */
+    
+    /* 步骤0: 降低转盘速度为原速度的1/4 */
+    Motor_SetVelocity(DEV_TURNTABLE, VELOCITY_TURNTABLE / 4);  /* 10000 -> 2500 mm/s */
+    osDelay(50);
+    
+    /* 步骤1: 抓钩上抓270°，转盘顺时针转360°（运动到零点） */
+    FlyBox_HookRotate(-270.0f);  /* 负数表示上抓 */
+    osDelay(5);
+    FlyBox_TurntableRotate(360.0f);  /* 正数表示顺时针 */
+    osDelay(5);
+    
+    /* 步骤2: 轮流检测两个电机停止移动（到达零点） */
     {
-        osThreadResume(g_testTaskHandle);
+        const int stable_needed = 5;
+        
+        /* 抓钩电机状态 */
+        int hook_stable_count = 0;
+        float hook_last_pos = 0.0f;
+        int hook_has_last = 0;
+        int hook_stopped = 0;
+        
+        /* 转盘电机状态 */
+        int turntable_stable_count = 0;
+        float turntable_last_pos = 0.0f;
+        int turntable_has_last = 0;
+        int turntable_stopped = 0;
+        
+        for (uint32_t attempt = 0;; attempt++) {
+            /* 防止计数器溢出，超过10000时归零 */
+            if (attempt > 10000) {
+                attempt = 0;
+            }
+            
+            /* 轮流请求两个电机的位置 */
+            uint8_t query_dev = (attempt % 2 == 0) ? DEV_HOOK : DEV_TURNTABLE;
+            
+            Motor_RequestPosition(query_dev);
+            
+            if (xQueueReceive(CarCanQueueHandle, &carMsg, pdMS_TO_TICKS(50)) == pdTRUE) {
+                if (carMsg.id == 0x409 && carMsg.len >= 6) {
+                    uint8_t resp_dev = 0;
+                    float pos_mm = Motor_ParsePosition(carMsg.data, &resp_dev);
+                    
+                    /* 处理抓钩电机响应 */
+                    if (resp_dev == DEV_HOOK && !hook_stopped) {
+                        if (!hook_has_last) {
+                            hook_last_pos = pos_mm;
+                            hook_has_last = 1;
+                            hook_stable_count = 1;
+                        } else {
+                            if (fabsf(pos_mm - hook_last_pos) < 5.0f) {
+                                hook_stable_count++;
+                            } else {
+                                hook_stable_count = 1;
+                                hook_last_pos = pos_mm;
+                            }
+                        }
+                        
+                        if (hook_stable_count >= stable_needed) {
+                            hook_stopped = 1;  /* 抓钩已停止 */
+                            /* 重新使能抓钩电机 */
+                            Motor_Enable(MOTOR_ENABLE, DEV_HOOK);
+                            osDelay(10);
+                            /* 立即回到默认位置：放下215° */
+                            FlyBox_HookRotate(215.0f);
+                        }
+                    }
+                    
+                    /* 处理转盘电机响应 */
+                    if (resp_dev == DEV_TURNTABLE && !turntable_stopped) {
+                        if (!turntable_has_last) {
+                            turntable_last_pos = pos_mm;
+                            turntable_has_last = 1;
+                            turntable_stable_count = 1;
+                        } else {
+                            if (fabsf(pos_mm - turntable_last_pos) < 5.0f) {
+                                turntable_stable_count++;
+                            } else {
+                                turntable_stable_count = 1;
+                                turntable_last_pos = pos_mm;
+                            }
+                        }
+                        
+                        if (turntable_stable_count >= stable_needed) {
+                            turntable_stopped = 1;  /* 转盘已停止 */
+                            /* 重新使能转盘电机 */
+                            Motor_Enable(MOTOR_ENABLE, DEV_TURNTABLE);
+                            osDelay(10);
+                            /* 立即回到默认位置：逆转124° */
+                            FlyBox_TurntableRotate(-124.0f);
+                        }
+                    }
+                }
+            }
+            
+            /* 两个电机都停止后退出循环 */
+            if (hook_stopped && turntable_stopped) {
+                break;
+            }
+            
+            osDelay(5);
+        }
     }
+    
+    /* 步骤3: 底带回零（单独执行，不与前面同步） */
+    /* 降低底带速度为原速度的1/2 */
+    Motor_SetVelocity(DEV_BOTTOM_BELT, VELOCITY_BELT / 4);  /* 9700 -> 4850 mm/s */
+    osDelay(2000);
+    
+    /* 底带回退60cm */
+    FlyBox_BeltMove(-600.0f);
+    osDelay(50);
+    
+    /* 检测底带停止移动 */
+    {
+        const int stable_needed = 5;
+        int belt_stable_count = 0;
+        float belt_last_pos = 0.0f;
+        int belt_has_last = 0;
+        
+        for (uint32_t attempt = 0;; attempt++) {
+            if (attempt > 10000) {
+                attempt = 0;
+            }
+            
+            Motor_RequestPosition(DEV_BOTTOM_BELT);
+            
+            if (xQueueReceive(CarCanQueueHandle, &carMsg, pdMS_TO_TICKS(50)) == pdTRUE) {
+                if (carMsg.id == 0x409 && carMsg.len >= 6) {
+                    uint8_t resp_dev = 0;
+                    float pos_mm = Motor_ParsePosition(carMsg.data, &resp_dev);
+                    
+                    if (resp_dev == DEV_BOTTOM_BELT) {
+                        if (!belt_has_last) {
+                            belt_last_pos = pos_mm;
+                            belt_has_last = 1;
+                            belt_stable_count = 1;
+                        } else {
+                            if (fabsf(pos_mm - belt_last_pos) < 5.0f) {
+                                belt_stable_count++;
+                            } else {
+                                belt_stable_count = 1;
+                                belt_last_pos = pos_mm;
+                            }
+                        }
+                        
+                        if (belt_stable_count >= stable_needed) {
+                            break;  /* 底带已停止 */
+                        }
+                    }
+                }
+            }
+            
+            osDelay(25);
+        }
+    }
+    
+    /* 重新使能底带电机 */
+    Motor_Enable(MOTOR_ENABLE, DEV_BOTTOM_BELT);
+    osDelay(5);
+    
+    /* 底带前进2cm */
+    FlyBox_BeltMove(340.0f);
+    osDelay(500);
+    
+    /* 恢复底带速度 */
+    Motor_SetVelocity(DEV_BOTTOM_BELT, VELOCITY_BELT);  /* 恢复为 9700 mm/s */
+    osDelay(50);
+    
+    osDelay(1000);
+	FlyBox_HookRotate(-90.0f);        /* 抓钩再上抓90° */
+    osDelay(500);
+    
+    /* 恢复转盘速度 */
+    Motor_SetVelocity(DEV_TURNTABLE, VELOCITY_TURNTABLE);  /* 恢复为 10000 mm/s */
+    osDelay(50);
+    
+    /* 回零完成，任务挂起 */
     vTaskSuspend(NULL);
 }
 
